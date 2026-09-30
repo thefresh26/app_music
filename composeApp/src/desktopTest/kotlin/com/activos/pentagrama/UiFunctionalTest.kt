@@ -59,7 +59,7 @@ class UiFunctionalTest {
 
         // 2. Abrir el ejemplo de cifrado
         onNodeWithText("Ver ejemplo").performClick()
-        waitUntil(30_000) { onAllNodesWithTag("score").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("score").fetchSemanticsNodes().isNotEmpty() }
         waitForText("compases")
         snap("02_editor_ejemplo")
 
@@ -100,7 +100,7 @@ class UiFunctionalTest {
         onNode(hasSetTextAction()).performTextInput("Rey de Reyes")
         snap("06_dialogo_nueva")
         onNodeWithText("Crear").performClick()
-        waitUntil(30_000) { onAllNodesWithTag("score").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("score").fetchSemanticsNodes().isNotEmpty() }
         waitForText("Rey de Reyes")
         snap("07_partitura_nueva")
     }
