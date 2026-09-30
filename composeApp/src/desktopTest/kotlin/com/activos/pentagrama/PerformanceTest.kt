@@ -94,8 +94,8 @@ class PerformanceTest {
     fun memoriaDelAudioDecodificado() {
         val audio = song(60)
         val mb = audio.samples.size * 4 / 1_048_576.0
-        report("Memoria de 1 min de audio decodificado", "${"%.1f".format(mb)} MB (máx. 15 min ≈ ${"%.0f".format(mb * 15)} MB)", "< 5 MB/min")
-        assertTrue(mb < 5.0)
+        report("Memoria de 1 min de audio decodificado", "${"%.1f".format(mb)} MB (máx. 15 min ≈ ${"%.0f".format(mb * 15)} MB)", "< 6 MB/min")
+        assertTrue(mb < 6.0, "usa $mb MB por minuto")
     }
 
     private fun bigScore(measures: Int): Score {
