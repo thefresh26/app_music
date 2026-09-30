@@ -32,9 +32,19 @@ actual object ScoreStorage {
         StoredScore(f.nameWithoutExtension, title, f.lastModified())
     }.sortedByDescending { it.modified }
 
-    actual fun load(id: String): String? = File(dir, "$id.json").takeIf { it.exists() }?.readText()
-    actual fun save(id: String, json: String) { File(dir, "$id.json").writeText(json) }
-    actual fun delete(id: String) { File(dir, "$id.json").delete() }
+    private fun file(id: String) = File(dir, "${requireSafeId(id)}.json")
+
+    actual fun load(id: String): String? = file(id).takeIf { it.exists() && it.length() <= MAX_SCORE_FILE_BYTES }?.readText()
+
+    actual fun save(id: String, json: String) {
+        // Atomic write: a crash while saving never leaves a half-written score.
+        val target = file(id)
+        val tmp = File(dir, "${requireSafeId(id)}.tmp")
+        tmp.writeText(json)
+        if (!tmp.renameTo(target)) { target.delete(); tmp.renameTo(target) }
+    }
+
+    actual fun delete(id: String) { file(id).delete() }
 }
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
@@ -78,7 +88,7 @@ private class FileAudioSource(private val file: File) : AudioSource {
             runCatching { bitstream.close() }
         }
         onProgress(1f)
-        return ds.result(name)
+        return ds.result(if (ds.truncated) "$name (primeros 15 min)" else name)
     }
 
     private suspend fun decodeJavaSound(onProgress: (Float) -> Unit): PcmAudio {
@@ -149,6 +159,7 @@ actual fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit
     return remember<() -> Unit> {
         {
             chooseFile("Abrir partitura", save = false) { it.endsWith(".pentagrama") || it.endsWith(".json") }
+                ?.takeIf { it.length() <= MAX_SCORE_FILE_BYTES }
                 ?.let { f -> runCatching { f.readText() }.getOrNull()?.let { cb(f.name, it) } }
         }
     }

@@ -93,4 +93,23 @@ class CoreTest {
         assertTrue(SymbolCatalog.curated.any { it.matches("calderon") })
         assertTrue(SymbolCatalog.curated.any { it.matches("clave fa") })
     }
+
+    @Test
+    fun rejectsMaliciousFiles() {
+        fun rejected(t: String) = runCatching { ScoreJson.decode(t) }.isFailure
+        assertTrue(rejected("[".repeat(10_000)), "anidamiento profundo")
+        assertTrue(rejected("[1,2]"), "no es objeto")
+        assertTrue(rejected("{}basura"), "contenido extra")
+        assertTrue(rejected("{\"key\": 1e999}"), "número infinito")
+        val s = ScoreJson.decode("{\"title\":\"" + "a".repeat(1000) + "\",\"key\":99,\"timeDen\":7}")
+        assertEquals(200, s.title.length)
+        assertEquals(7, s.keyFifths)
+        assertEquals(4, s.timeDen)
+    }
+
+    @Test
+    fun rejectsUnsafeStorageIds() {
+        assertTrue(runCatching { com.activos.pentagrama.platform.requireSafeId("../../etc/passwd") }.isFailure)
+        assertEquals("s123", com.activos.pentagrama.platform.requireSafeId("s123"))
+    }
 }

@@ -10,7 +10,16 @@ class PcmAudio(val samples: FloatArray, val sampleRate: Int, val name: String) {
  * decimates it by an integer factor (box filter) so long songs stay small in memory.
  * Decoders (Android MediaCodec, desktop JLayer) push blocks as they decode.
  */
-class MonoDownsampler(private val targetMinRate: Int = 16_000) {
+class MonoDownsampler(private val targetMinRate: Int = 16_000, private val maxSeconds: Int = MAX_SECONDS) {
+    companion object {
+        /** Longest audio kept in memory (protects low-memory phones from huge files). */
+        const val MAX_SECONDS = 15 * 60
+    }
+
+    /** True when the input was longer than [maxSeconds] and got truncated. */
+    var truncated = false
+        private set
+
     private var srcRate = 0
     private var factor = 1
     private var acc = 0f
@@ -49,6 +58,7 @@ class MonoDownsampler(private val targetMinRate: Int = 16_000) {
     }
 
     private fun push(v: Float) {
+        if (size >= maxSeconds * outputRate) { truncated = true; return }
         acc += v; accCount++
         if (accCount >= factor) {
             if (size == out.size) out = out.copyOf(out.size * 2)

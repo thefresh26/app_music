@@ -7,12 +7,26 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Mínimo privilegio: solo lectura por defecto; el job de release pide escritura.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  secrets-scan:
+    name: Escaneo de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Instalar y ejecutar gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks detect --source . --redact --verbose --exit-code 1
+
   android:
     name: Pruebas + APK Android
+    needs: secrets-scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +35,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: true
       - name: Pruebas de la lógica (transcripción, modelo, layout)
         run: chmod +x gradlew && ./gradlew :composeApp:desktopTest --stacktrace
       - name: Compilar APK
@@ -60,8 +76,10 @@ jobs:
   release:
     name: Publicar versión
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ android, desktop ]
+    needs: [ secrets-scan, android, desktop ]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:

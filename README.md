@@ -63,6 +63,10 @@ composeApp/src/
 
 Las partituras se guardan en el almacenamiento interno (Android) o en `~/Pentagrama` (PC).
 
+## Privacidad y seguridad
+
+La app funciona **sin internet**: no tiene cuentas, publicidad ni analítica, y el audio nunca sale del dispositivo. Ver [PRIVACY.md](PRIVACY.md), [TERMS.md](TERMS.md) y [SECURITY.md](SECURITY.md).
+
 ## Licencias
 
 - Fuente **Bravura** © Steinberg Media Technologies GmbH, licencia SIL Open Font License 1.1 (`composeResources/files/BRAVURA-OFL.txt`).

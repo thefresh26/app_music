@@ -5,6 +5,17 @@ import com.activos.pentagrama.audio.PcmAudio
 
 data class StoredScore(val id: String, val title: String, val modified: Long)
 
+/** Maximum size of a score file the user can open (bytes). */
+const val MAX_SCORE_FILE_BYTES = 5L * 1024 * 1024
+
+private val SAFE_ID = Regex("^[A-Za-z0-9_-]{1,64}$")
+
+/** Rejects ids that could escape the storage folder (e.g. "../"). */
+fun requireSafeId(id: String): String {
+    require(SAFE_ID.matches(id)) { "Identificador de partitura inválido" }
+    return id
+}
+
 /** Local persistence of scores (JSON text). */
 expect object ScoreStorage {
     fun list(): List<StoredScore>

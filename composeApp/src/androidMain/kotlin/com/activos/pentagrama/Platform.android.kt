@@ -39,12 +39,35 @@ actual object ScoreStorage {
         StoredScore(f.nameWithoutExtension, title, f.lastModified())
     }.sortedByDescending { it.modified }
 
-    actual fun load(id: String): String? = File(dir, "$id.json").takeIf { it.exists() }?.readText()
-    actual fun save(id: String, json: String) { File(dir, "$id.json").writeText(json) }
-    actual fun delete(id: String) { File(dir, "$id.json").delete() }
+    private fun file(id: String) = File(dir, "${requireSafeId(id)}.json")
+
+    actual fun load(id: String): String? = file(id).takeIf { it.exists() && it.length() <= MAX_SCORE_FILE_BYTES }?.readText()
+
+    actual fun save(id: String, json: String) {
+        // Atomic write: a crash while saving never leaves a half-written score.
+        val target = file(id)
+        val tmp = File(dir, "${requireSafeId(id)}.tmp")
+        tmp.writeText(json)
+        if (!tmp.renameTo(target)) { target.delete(); tmp.renameTo(target) }
+    }
+
+    actual fun delete(id: String) { file(id).delete() }
 }
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+/** Reads at most [limit] bytes (InputStream.readNBytes needs API 33). */
+private fun java.io.InputStream.readNBytesCompat(limit: Long): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(16 * 1024)
+    var total = 0L
+    while (total < limit) {
+        val n = read(buf, 0, minOf(buf.size.toLong(), limit - total).toInt())
+        if (n <= 0) break
+        out.write(buf, 0, n); total += n
+    }
+    return out.toByteArray()
+}
 actual val platformName: String = "Android"
 
 private fun displayName(context: Context, uri: Uri): String {
@@ -139,7 +162,7 @@ private class UriAudioSource(private val context: Context, private val uri: Uri)
             extractor.release()
         }
         onProgress(1f)
-        ds.result(name)
+        ds.result(if (ds.truncated) "$name (primeros 15 min)" else name)
     }
 }
 
@@ -181,7 +204,13 @@ actual fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit
     val cb by rememberUpdatedState(onOpened)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            val text = runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() }.getOrNull()
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val bytes = input.readNBytesCompat(MAX_SCORE_FILE_BYTES + 1)
+                    require(bytes.size <= MAX_SCORE_FILE_BYTES) { "Archivo demasiado grande" }
+                    bytes.decodeToString()
+                }
+            }.getOrNull()
             if (text != null) cb(displayName(context, uri), text)
         }
     }

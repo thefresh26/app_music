@@ -9,3 +9,15 @@ captures/
 *.apk
 *.aab
 !gradle/wrapper/gradle-wrapper.jar
+
+# Secretos y firmas: nunca al repositorio
+.env
+.env.*
+*.jks
+*.keystore
+*.p12
+*.pem
+keystore.properties
+signing.properties
+secrets.properties
+google-services.json

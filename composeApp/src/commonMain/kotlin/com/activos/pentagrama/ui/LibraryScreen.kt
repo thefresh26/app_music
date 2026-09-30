@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
@@ -75,6 +76,7 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
     var showNew by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<StoredScore?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
+    var showPrivacy by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(info) { info?.let { snackbar.showSnackbar(it); info = null } }
 
@@ -94,6 +96,7 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("Pentagrama") },
+                actions = { IconButton(onClick = { showPrivacy = true }) { Icon(Icons.Filled.Info, "Privacidad") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             )
         },
@@ -151,6 +154,19 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
         refresh++
         onOpen(id, s)
     }
+    if (showPrivacy) AlertDialog(
+        onDismissRequest = { showPrivacy = false },
+        title = { Text("Privacidad") },
+        text = {
+            Text(
+                "Pentagrama funciona sin internet. Tus partituras se guardan solo en este dispositivo y el audio " +
+                    "que transcribes se procesa en memoria: nunca se envía ni se guarda. No hay cuentas, publicidad, " +
+                    "cookies ni analítica.\n\nTratamiento conforme a la Ley 1581 de 2012 (Colombia). " +
+                    "Contacto: soporte.tecnico@activosporcolombia.com"
+            )
+        },
+        confirmButton = { TextButton(onClick = { showPrivacy = false }) { Text("Entendido") } },
+    )
     toDelete?.let { st ->
         AlertDialog(
             onDismissRequest = { toDelete = null },

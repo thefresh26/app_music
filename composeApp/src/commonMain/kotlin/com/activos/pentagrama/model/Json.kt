@@ -66,10 +66,23 @@ object Json {
         sb.append('"')
     }
 
-    fun parse(text: String): JsonValue = Parser(text).run { val v = value(); ws(); v }
+    /** Maximum accepted document size (characters) and nesting depth, to reject malicious/huge files. */
+    const val MAX_CHARS = 5_000_000
+    const val MAX_DEPTH = 64
+
+    fun parse(text: String): JsonValue {
+        require(text.length <= MAX_CHARS) { "Archivo demasiado grande" }
+        return Parser(text).run {
+            val v = value(); ws()
+            require(i == s.length) { "Contenido extra después del JSON" }
+            v
+        }
+    }
 
     private class Parser(val s: String) {
         var i = 0
+        var depth = 0
+        fun enter() { depth++; require(depth <= MAX_DEPTH) { "JSON demasiado anidado" } }
         fun ws() { while (i < s.length && s[i].isWhitespace()) i++ }
         fun value(): JsonValue {
             ws()
@@ -86,21 +99,23 @@ object Json {
         }
         fun expect(w: String) { if (!s.startsWith(w, i)) error("Se esperaba $w en $i"); i += w.length }
         fun obj(): JsonValue {
+            enter()
             i++; val m = LinkedHashMap<String, JsonValue>()
-            ws(); if (s[i] == '}') { i++; return JsonValue.Obj(m) }
+            ws(); if (s[i] == '}') { i++; depth--; return JsonValue.Obj(m) }
             while (true) {
                 ws(); val k = string(); ws()
                 if (s[i] != ':') error("Se esperaba ':' en $i"); i++
                 m[k] = value(); ws()
-                when (s[i]) { ',' -> i++; '}' -> { i++; return JsonValue.Obj(m) }; else -> error("Se esperaba ',' o '}' en $i") }
+                when (s[i]) { ',' -> i++; '}' -> { i++; depth--; return JsonValue.Obj(m) }; else -> error("Se esperaba ',' o '}' en $i") }
             }
         }
         fun arr(): JsonValue {
+            enter()
             i++; val l = mutableListOf<JsonValue>()
-            ws(); if (s[i] == ']') { i++; return JsonValue.Arr(l) }
+            ws(); if (s[i] == ']') { i++; depth--; return JsonValue.Arr(l) }
             while (true) {
                 l += value(); ws()
-                when (s[i]) { ',' -> i++; ']' -> { i++; return JsonValue.Arr(l) }; else -> error("Se esperaba ',' o ']' en $i") }
+                when (s[i]) { ',' -> i++; ']' -> { i++; depth--; return JsonValue.Arr(l) }; else -> error("Se esperaba ',' o ']' en $i") }
             }
         }
         fun string(): String {
@@ -115,7 +130,10 @@ object Json {
                         when (val e = s[i++]) {
                             'n' -> sb.append('\n'); 'r' -> sb.append('\r'); 't' -> sb.append('\t')
                             'b' -> sb.append('\b'); 'f' -> sb.append('\u000C')
-                            'u' -> { sb.append(s.substring(i, i + 4).toInt(16).toChar()); i += 4 }
+                            'u' -> {
+                                require(i + 4 <= s.length) { "Escape \\u incompleto" }
+                                sb.append(s.substring(i, i + 4).toInt(16).toChar()); i += 4
+                            }
                             else -> sb.append(e)
                         }
                     }
@@ -125,8 +143,10 @@ object Json {
         }
         fun num(): JsonValue {
             val st = i
-            while (i < s.length && (s[i].isDigit() || s[i] in "+-.eE")) i++
-            return JsonValue.Num(s.substring(st, i).toDouble())
+            while (i < s.length && (s[i].isDigit() || s[i] in "+-.eE") && i - st < 32) i++
+            val d = s.substring(st, i).toDoubleOrNull() ?: error("Número inválido en $st")
+            require(d.isFinite()) { "Número inválido en $st" }
+            return JsonValue.Num(d)
         }
     }
 }
@@ -174,9 +194,44 @@ object ScoreJson {
         "free" to JsonValue.Arr(m.free.map { obj("c" to n(it.codepoint), "x" to n(it.xFrac), "y" to n(it.staffStep)) }),
     )
 
+    /** Sanity limits so a crafted file cannot exhaust memory or break the layout. */
+    const val MAX_MEASURES = 5_000
+    const val MAX_EVENTS_PER_MEASURE = 256
+    const val MAX_TEXT = 200
+
+    private fun String.clip() = if (length > MAX_TEXT) substring(0, MAX_TEXT) else this
+
     fun decode(text: String): Score {
         val j = Json.parse(text)
+        require(j is JsonValue.Obj) { "No es una partitura" }
+        require((j["measures"]?.arr?.size ?: 0) <= MAX_MEASURES) { "Demasiados compases" }
         val def = Score()
+        return decodeUnchecked(j, def).let { s ->
+            s.copy(
+                title = s.title.clip(), composer = s.composer.clip(), subtitle = s.subtitle.clip(),
+                keyFifths = s.keyFifths.coerceIn(-7, 7),
+                timeNum = s.timeNum.coerceIn(1, 32),
+                timeDen = s.timeDen.takeIf { it in setOf(1, 2, 4, 8, 16, 32) } ?: 4,
+                tempoBpm = s.tempoBpm.coerceIn(20, 400),
+                measuresPerLine = s.measuresPerLine.coerceIn(0, 12),
+                measures = s.measures.map { m ->
+                    m.copy(
+                        events = m.events.take(MAX_EVENTS_PER_MEASURE).map { e ->
+                            e.copy(
+                                pitches = e.pitches.take(16).map { p -> p.copy(step = p.step.coerceIn(0, 6), octave = p.octave.coerceIn(0, 9), alter = p.alter.coerceIn(-2, 2)) },
+                                dots = e.dots.coerceIn(0, 2), marks = e.marks.take(16), lyric = e.lyric?.clip(),
+                            )
+                        },
+                        chords = m.chords.take(16).map { it.copy(text = it.text.clip(), tick = it.tick.coerceAtLeast(0)) },
+                        marks = m.marks.take(16), section = m.section?.clip(), ending = m.ending?.clip(), text = m.text?.clip(),
+                        free = m.free.take(64).map { it.copy(xFrac = it.xFrac.coerceIn(0f, 1f), staffStep = it.staffStep.coerceIn(-20, 30), codepoint = it.codepoint.takeIf { c -> c in 0xE000..0xF8FF } ?: 0xE0A4) },
+                    )
+                },
+            )
+        }
+    }
+
+    private fun decodeUnchecked(j: JsonValue, def: Score): Score {
         return Score(
             title = j["title"]?.str ?: def.title,
             composer = j["composer"]?.str ?: "",
