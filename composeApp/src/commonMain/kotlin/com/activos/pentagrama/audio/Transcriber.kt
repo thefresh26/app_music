@@ -377,12 +377,22 @@ object Transcriber {
                 else vals += m
             } else {
                 deviate = 0
-                if (isOnset && f - start >= minFrames) { close(f); start = f }
+                // Repeated note: only split when the energy really rises (a new attack), not on codec/vibrato noise.
+                if (reattackAt(rms, f) && f - start >= minFrames) { close(f); start = f }
                 vals += m
             }
         }
         close(midi.size)
         return notes
+    }
+
+    /** True when the energy around frame [f] rises clearly above the level just before it (a new attack). */
+    private fun reattackAt(rms: FloatArray, f: Int): Boolean {
+        if (f !in rms.indices || f < 1) return false
+        if (rms[f] <= rms[f - 1]) return false
+        var before = Float.MAX_VALUE
+        for (k in f - 4..f - 1) if (k in rms.indices) before = min(before, rms[k])
+        return rms[f] >= 1.5f * before
     }
 
     // ---------------------------------------------------------------- key & chords

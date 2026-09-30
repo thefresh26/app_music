@@ -112,4 +112,13 @@ class CoreTest {
         assertTrue(runCatching { com.activos.pentagrama.platform.requireSafeId("../../etc/passwd") }.isFailure)
         assertEquals("s123", com.activos.pentagrama.platform.requireSafeId("s123"))
     }
+
+    @Test
+    fun notasRepetidasSeSeparan() {
+        val x = synth(listOf(67 to 1.0, 67 to 1.0, 67 to 1.0, 67 to 1.0, 69 to 2.0, 69 to 2.0), 120.0)
+        val ds = MonoDownsampler(); ds.configure(22050); ds.pushFloats(x, x.size, 1)
+        val r = Transcriber.transcribe(ds.result("rep.mp3"), TranscribeOptions(mode = TranscribeMode.MELODY, bpm = 120))
+        val first = r.score.measures.first().events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi }
+        assertEquals(listOf(67, 67, 67, 67), first)
+    }
 }
