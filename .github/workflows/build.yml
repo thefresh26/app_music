@@ -41,7 +41,7 @@ jobs:
         run: chmod +x gradlew && ./gradlew :composeApp:desktopTest --stacktrace
       - name: Compilar APK
         run: ./gradlew :composeApp:assembleDebug --stacktrace
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Pentagrama-android-apk
           path: composeApp/build/outputs/apk/debug/*.apk
@@ -68,7 +68,7 @@ jobs:
         run: |
           cd composeApp/build/compose/binaries/main/app
           if [ "$RUNNER_OS" == "Windows" ]; then 7z a ../../../../../../Pentagrama-${{ runner.os }}.zip Pentagrama; else zip -qr ../../../../../../Pentagrama-${{ runner.os }}.zip .; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Pentagrama-desktop-${{ runner.os }}
           path: Pentagrama-${{ runner.os }}.zip
