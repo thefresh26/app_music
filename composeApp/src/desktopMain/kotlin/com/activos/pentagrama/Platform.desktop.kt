@@ -57,7 +57,7 @@ private class CountingStream(input: InputStream) : FilterInputStream(input) {
     override fun skip(n: Long): Long = super.skip(n).also { count += it }
 }
 
-private class FileAudioSource(private val file: File) : AudioSource {
+internal class FileAudioSource(private val file: File) : AudioSource {
     override val name: String = file.name
 
     override suspend fun decode(onProgress: (Float) -> Unit): PcmAudio = withContext(Dispatchers.IO) {

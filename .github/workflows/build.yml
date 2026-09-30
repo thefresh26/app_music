@@ -37,8 +37,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           validate-wrappers: true
-      - name: Pruebas de la lógica (transcripción, modelo, layout)
-        run: chmod +x gradlew && ./gradlew :composeApp:desktopTest --stacktrace
+      - name: Pruebas de lógica y de funcionamiento (audio MP3/WAV, interfaz)
+        run: chmod +x gradlew && xvfb-run -a ./gradlew :composeApp:desktopTest --stacktrace
+      - name: Capturas y reporte de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pentagrama-pruebas-capturas
+          path: |
+            composeApp/build/test-screenshots/
+            composeApp/build/reports/tests/
+          if-no-files-found: ignore
       - name: Compilar APK
         run: ./gradlew :composeApp:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4

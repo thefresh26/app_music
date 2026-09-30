@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -208,7 +209,7 @@ private fun ScoreView(state: EditorState, modifier: Modifier) {
             ScoreCanvas(
                 score = state.score, layout = layout, musicFont = LocalMusicFont.current, colors = colors,
                 selection = state.selection, onTap = state::tap,
-                modifier = Modifier.fillMaxWidth().height(heightDp),
+                modifier = Modifier.fillMaxWidth().height(heightDp).testTag("score"),
             )
         }
     }
