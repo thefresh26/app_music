@@ -34,7 +34,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           validate-wrappers: true
       - name: Pruebas de la lógica (transcripción, modelo, layout)
@@ -59,7 +59,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - name: Crear aplicación portable
         shell: bash
         run: chmod +x gradlew && ./gradlew :composeApp:createDistributable --stacktrace
