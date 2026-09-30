@@ -153,6 +153,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     ) { pad ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(pad)) {
             val wide = maxWidth > 840.dp
+            val paletteHeight = (maxHeight * 0.38f).coerceAtLeast(220.dp)
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -167,7 +168,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                     ScoreView(state, Modifier.weight(1f).fillMaxWidth())
                     HorizontalDivider()
                     EditToolbar(state)
-                    SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxWidth().height((maxHeight * 0.38f).coerceAtLeast(220.dp)))
+                    SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxWidth().height(paletteHeight))
                 }
             }
         }
