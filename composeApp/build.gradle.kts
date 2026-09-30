@@ -101,3 +101,12 @@ compose.desktop {
         }
     }
 }
+
+// Muestra en el log de CI el detalle completo de cualquier prueba que falle.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
+}

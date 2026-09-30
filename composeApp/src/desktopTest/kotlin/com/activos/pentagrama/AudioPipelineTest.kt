@@ -38,6 +38,10 @@ class AudioPipelineTest {
         assertTrue(pcm.durationSec in 6.0..7.5, "duración=${pcm.durationSec}")
 
         val r = Transcriber.transcribe(pcm, TranscribeOptions(mode = TranscribeMode.MELODY_AND_CHORDS))
+        println("MP3: rate=${pcm.sampleRate} dur=${pcm.durationSec} bpm=${r.bpm} key=${r.score.keyFifths} notas=${r.notes}")
+        r.score.measures.forEachIndexed { i, m ->
+            println("  compás ${i + 1}: " + m.events.joinToString(" ") { e -> (e.pitches.firstOrNull()?.name() ?: e.kind.name) + ":" + e.value.name })
+        }
         assertTrue(r.bpm in 110..130, "bpm=${r.bpm}")
         assertEquals(1, r.score.keyFifths, "armadura (Sol mayor / Mi menor)")
         val first = r.score.measures.first().events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi }
