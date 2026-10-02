@@ -12,6 +12,7 @@ import com.activos.pentagrama.model.TimeSymbol
 import com.activos.pentagrama.model.keyAlterFor
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** All sizes are expressed in "staff spaces" multiplied by [s] (pixels per staff space). */
@@ -85,7 +86,9 @@ class ScoreLayout(
 
         var eventIndex: Int? = null
         for (e in ml.events) {
-            if (x >= e.x - 0.5f * s && x <= e.x + max(e.width - 0.5f * s, 1.4f * s)) { eventIndex = e.index; break }
+            // Only the note itself is "hit", not the (stretched) empty space after it, so tapping further
+            // right inserts a new note instead of replacing this one.
+            if (x >= e.x - 0.5f * s && x <= e.x + min(e.width, 3f * s)) { eventIndex = e.index; break }
         }
         val insertIndex = ml.events.count { it.x + 0.6f * s < x }
         val mTicks = score.measureTicks
