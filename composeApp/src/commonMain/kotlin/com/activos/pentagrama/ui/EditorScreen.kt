@@ -259,6 +259,7 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
         selection = cs.primary.copy(alpha = 0.18f), measureSelection = cs.primary.copy(alpha = 0.07f),
         overfull = Color(0x22E53935), section = Color(0xFFE9F76B), sectionText = Color(0xFF1B1B1B),
         chord = Color(0xFF111111), paper = Color(0xFFFFFFFF), muted = Color(0xFF666666),
+        guide = cs.primary.copy(alpha = 0.22f),
     )
     BoxWithConstraints(modifier.background(Color(0xFFE9EAEE))) {
         val widthPx = with(density) { maxWidth.toPx() }

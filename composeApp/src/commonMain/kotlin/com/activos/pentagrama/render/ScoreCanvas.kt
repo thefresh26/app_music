@@ -34,6 +34,7 @@ import com.activos.pentagrama.model.NoteHead
 import com.activos.pentagrama.model.NoteValue
 import com.activos.pentagrama.model.Score
 import com.activos.pentagrama.model.StartBar
+import com.activos.pentagrama.model.TICKS_PER_QUARTER
 import com.activos.pentagrama.model.TimeSymbol
 import com.activos.pentagrama.symbols.G
 import com.activos.pentagrama.symbols.GlyphMetrics
@@ -53,6 +54,8 @@ data class ScoreColors(
     val chord: Color,
     val paper: Color,
     val muted: Color,
+    /** Faint lines that show the free beats ("casillas") where a tap places a note. Transparent = off (print). */
+    val guide: Color = Color.Transparent,
 )
 
 @Composable
@@ -293,6 +296,18 @@ internal class ScorePainter(
         for (ch in m.chords) {
             val x = chordX(ml, m.events, ch.tick)
             text(ch.text, x, chordBase, 1.9f, c.chord, bold = true)
+        }
+
+        // ---- free beats ("casillas"): where a tap in the empty part of the measure puts the note
+        if (c.guide.alpha > 0f && !m.repeatMeasure && m.usedTicks < score.measureTicks) {
+            val beat = TICKS_PER_QUARTER * 4 / score.timeDen
+            val lastEnd = ml.events.lastOrNull()?.let { it.x + px(1.8f) } ?: ml.contentX
+            var t = (m.usedTicks + beat - 1) / beat * beat
+            while (t < score.measureTicks) {
+                val x = ml.contentX + t.toFloat() / score.measureTicks * ml.contentWidth + px(0.6f)
+                if (x > lastEnd) ds.drawLine(c.guide, Offset(x, top), Offset(x, bottom), strokeWidth = px(0.9f))
+                t += beat
+            }
         }
 
         // ---- content

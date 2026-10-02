@@ -7,6 +7,8 @@ import com.activos.pentagrama.model.FreeSymbol
 import com.activos.pentagrama.model.Measure
 import com.activos.pentagrama.model.Pitch
 import com.activos.pentagrama.model.Score
+import com.activos.pentagrama.model.TICKS_PER_QUARTER
+import com.activos.pentagrama.model.decomposeTicks
 import com.activos.pentagrama.model.keyAlterFor
 import com.activos.pentagrama.render.Hit
 import com.activos.pentagrama.symbols.SymbolAction
@@ -61,7 +63,7 @@ object ScoreOps {
             SymbolAction.MeasureRepeat -> OpResult(score.updateMeasure(mi) {
                 if (it.repeatMeasure) it.copy(repeatMeasure = false) else it.copy(repeatMeasure = true, events = emptyList())
             }, Selection(mi))
-            SymbolAction.ChordSymbol -> OpResult(setChord(score, mi, hit.tick, text ?: ""), Selection(mi))
+            SymbolAction.ChordSymbol -> OpResult(setChord(score, mi, hit.tick - hit.tick % (TICKS_PER_QUARTER * 4 / score.timeDen), text ?: ""), Selection(mi))
             SymbolAction.SectionLabel -> OpResult(score.updateMeasure(mi) { it.copy(section = text?.ifBlank { null }) }, Selection(mi))
             SymbolAction.FreeText -> OpResult(score.updateMeasure(mi) { it.copy(text = text?.ifBlank { null }) }, Selection(mi))
             SymbolAction.Lyric -> onEvent(score, mi, hit.eventIndex) { it.copy(lyric = text?.ifBlank { null }) }
@@ -113,7 +115,20 @@ object ScoreOps {
             m.copy(events = m.events.toMutableList().also { it[ei] = ev }, repeatMeasure = false) to ei
         } else {
             val at = hit.insertIndex.coerceIn(0, m.events.size)
-            m.copy(events = m.events.toMutableList().also { it.add(at, ev) }, repeatMeasure = false) to at
+            val events = m.events.toMutableList()
+            if (at == events.size) {
+                // Tapped in the empty part of the measure: put the note where it was tapped,
+                // snapped to its own value (max. one beat) and fill the gap before it with rests.
+                val step = minOf(ev.ticks, TICKS_PER_QUARTER).coerceAtLeast(1)
+                val target = (hit.tick / step * step).coerceAtMost(score.measureTicks - ev.ticks).coerceAtLeast(0)
+                val gap = target - m.usedTicks
+                if (gap > 0) decomposeTicks(gap).forEach { (v, d) -> events += Event(EventKind.REST, v, dots = d) }
+                events += ev
+                m.copy(events = events, repeatMeasure = false) to events.lastIndex
+            } else {
+                events.add(at, ev)
+                m.copy(events = events, repeatMeasure = false) to at
+            }
         }
         var ns = score.updateMeasure(mi) { newMeasure }
         var msg: String? = null

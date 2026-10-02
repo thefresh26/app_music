@@ -158,4 +158,32 @@ class CoreTest {
         assertTrue(cues.size > 100 && cues.zipWithNext().all { it.first.sec <= it.second.sec })
         assertEquals(0, cues.first().event)
     }
+
+    @Test
+    fun laNotaVaDondeSeToca() {
+        // Una negra tocada al 60 % de un compás vacío de 4/4 cae en el tiempo 3, con un silencio de blanca antes.
+        val score = Score(measures = listOf(Measure(), Measure()))
+        val l = ScoreLayout.build(score, 1000f, 10f)
+        val sys = l.systems[0]
+        val m = sys.measures[0]
+        val negra = SymbolCatalog.curated.first { it.id == "note_QUARTER" }.action
+        val r = ScoreOps.apply(score, l.hitTest(m.contentX + 0.6f * m.contentWidth, sys.yForStep(4, 10f))!!, negra, chordMode = false)
+        val ev = r.score.measures[0].events
+        assertEquals(listOf(EventKind.REST, EventKind.NOTE), ev.map { it.kind })
+        assertEquals(NoteValue.HALF, ev[0].value)
+    }
+
+    @Test
+    fun sePuedenAgregarVariasNotasEnUnCompas() {
+        var score = Score(measures = listOf(Measure(), Measure()))
+        val negra = SymbolCatalog.curated.first { it.id == "note_QUARTER" }.action
+        for (frac in listOf(0.02f, 0.3f, 0.55f, 0.8f)) {
+            val l = ScoreLayout.build(score, 1000f, 10f)
+            val sys = l.systems[0]
+            val m = sys.measures[0]
+            val x = maxOf(m.contentX + frac * m.contentWidth, (m.events.lastOrNull()?.x ?: 0f) + 40f)
+            score = ScoreOps.apply(score, l.hitTest(x, sys.yForStep(4, 10f))!!, negra, chordMode = false).score
+        }
+        assertEquals(List(4) { NoteValue.QUARTER }, score.measures[0].events.map { it.value })
+    }
 }

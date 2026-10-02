@@ -95,10 +95,9 @@ class ScoreLayout(
         val tick = when {
             eventIndex != null -> ml.events[eventIndex].startTick
             measure.events.isEmpty() || insertIndex >= ml.events.size -> {
+                // Empty space: the measure works like a time ruler, so the tap says *when* the note goes.
                 val frac = ((x - ml.contentX) / ml.contentWidth).coerceIn(0f, 0.999f)
-                val beat = TICKS_PER_QUARTER * 4 / score.timeDen
-                ((frac * mTicks / beat).toInt() * beat).coerceAtMost(mTicks - 1).coerceAtLeast(0)
-                    .let { if (measure.events.isNotEmpty()) max(it, measure.usedTicks.coerceAtMost(mTicks - 1)) else it }
+                (frac * mTicks).toInt().coerceIn(0, mTicks - 1)
             }
             else -> ml.events[insertIndex].startTick
         }
