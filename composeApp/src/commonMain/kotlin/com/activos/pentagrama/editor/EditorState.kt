@@ -31,7 +31,13 @@ class EditorState(initial: Score, val id: String) {
         if (!soundOn) return
         val sel = selection ?: return
         val e = sel.event?.let { score.measures.getOrNull(sel.measure)?.events?.getOrNull(it) } ?: return
-        if (e.kind == EventKind.NOTE && e.pitches.isNotEmpty()) onAudition?.invoke(e.pitches.map { it.midi })
+        when {
+            e.kind == EventKind.NOTE && e.pitches.isNotEmpty() -> onAudition?.invoke(e.pitches.map { it.midi })
+            e.kind == EventKind.SLASH -> {
+                val tick = score.measures[sel.measure].events.take(sel.event!!).sumOf { it.ticks }
+                onAudition?.invoke(com.activos.pentagrama.audio.Synth.slashNotes(score, sel.measure, tick))
+            }
+        }
     }
     var dirty by mutableStateOf(false)
     var pendingText by mutableStateOf<PendingText?>(null)

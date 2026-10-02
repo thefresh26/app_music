@@ -153,4 +153,31 @@ class PerformanceTest {
         report("Búsqueda de figuras (por consulta, ${glyphs.size + SymbolCatalog.curated.size} figuras)", "${"%.1f".format(per)} ms", "< 50 ms")
         assertTrue(per < 50)
     }
+
+    @Test
+    fun sonidoAlEscribirYAlDarPlay() {
+        // Lo que se oye al tocar una nota, un acorde o una barra rítmica: debe estar listo casi al instante.
+        val casos = listOf("nota" to listOf(67), "acorde" to listOf(43, 55, 59, 62), "barra rítmica sin acorde" to emptyList())
+        repeat(20) { casos.forEach { (_, m) -> com.activos.pentagrama.audio.Synth.preview(m) } }
+        for ((nombre, midis) in casos) {
+            val (_, ms) = timed { repeat(100) { com.activos.pentagrama.audio.Synth.preview(midis) } }
+            val per = ms / 100.0
+            report("Preparar el sonido de una $nombre al escribirla", "${"%.2f".format(per)} ms", "< 20 ms")
+            assertTrue(per < 20, "$nombre tardó $per ms")
+        }
+
+        // ▶ Play: antes de sonar se sintetiza toda la partitura. Canción de ~5 min con melodía, acordes y barras rítmicas.
+        val base = bigScore(80)
+        val score = base.copy(tempoBpm = 120, measures = base.measures + base.measures.take(70).map { m ->
+            m.copy(events = List(4) { Event(EventKind.SLASH, NoteValue.QUARTER) })
+        })
+        repeat(2) { com.activos.pentagrama.audio.Synth.render(score) }
+        val (r, ms) = timed { com.activos.pentagrama.audio.Synth.render(score) }
+        val secs = r.pcm.size / r.sampleRate
+        report("Sintetizar ${score.measures.size} compases (${secs / 60} min ${secs % 60} s) antes de ▶", "$ms ms", "< 2 000 ms")
+        assertTrue(ms < 2_000, "tardó $ms ms")
+        val (_, uno) = timed { com.activos.pentagrama.audio.Synth.render(score, fromMeasure = score.measures.size - 1) }
+        report("▶ desde el último compás", "$uno ms", "< 100 ms")
+        assertTrue(uno < 100)
+    }
 }

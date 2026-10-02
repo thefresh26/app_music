@@ -7,6 +7,7 @@ import com.activos.pentagrama.model.Score
 import com.activos.pentagrama.model.StartBar
 import com.activos.pentagrama.model.TICKS_PER_QUARTER
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.pow
@@ -71,24 +72,56 @@ object Synth {
 
     private fun freq(midi: Int) = 440.0 * 2.0.pow((midi - 69) / 12.0)
 
-    /** Adds one decaying additive tone into [buf]. */
+    /** Adds one decaying additive tone into [buf]. Oscillator and envelope run as recurrences (no sin/exp per sample). */
     private fun tone(buf: FloatArray, startSec: Double, durSec: Double, midi: Int, gain: Double) {
         val sr = SAMPLE_RATE
         val s0 = (startSec * sr).toInt()
         val len = ((durSec + 0.08) * sr).toInt()
         val f = freq(midi)
         val w = 2 * PI * f / sr
-        val decay = 1.2 + f / 400.0
+        val cw = cos(w); val sw = sin(w)
+        val decayStep = exp(-(1.2 + f / 400.0) / sr)
+        val releaseStep = exp(-1.0 / (0.02 * sr))
         val release = (durSec * sr).toInt()
-        for (k in 0 until len) {
-            val idx = s0 + k
-            if (idx !in buf.indices) break
-            val t = k.toDouble() / sr
-            var env = min(1.0, t * 200) * exp(-t * decay)
-            if (k > release) env *= exp(-(k - release).toDouble() / (0.02 * sr))
-            val x = sin(w * k) + 0.45 * sin(2 * w * k) + 0.2 * sin(3 * w * k) + 0.08 * sin(4 * w * k)
-            buf[idx] += (gain * env * x).toFloat()
+        var s = 0.0; var c = 1.0 // sin(wk), cos(wk)
+        var env = 1.0
+        val attack = sr / 200 // 5 ms
+        val end = min(len, buf.size - s0)
+        for (k in 0 until end) {
+            if (s0 + k >= 0) {
+                val s2 = 2 * s * c; val c2 = 1 - 2 * s * s
+                val x = s + 0.45 * s2 + 0.2 * s * (3 - 4 * s * s) + 0.08 * 2 * s2 * c2
+                val a = if (k < attack) k.toDouble() / attack else 1.0
+                buf[s0 + k] += (gain * a * env * x).toFloat()
+            }
+            val ns = s * cw + c * sw; c = c * cw - s * sw; s = ns
+            env *= if (k > release) decayStep * releaseStep else decayStep
         }
+    }
+
+    /** Short percussive click (filtered noise), used for rhythm slashes without a chord. */
+    private fun click(buf: FloatArray, startSec: Double, gain: Double) {
+        val s0 = (startSec * SAMPLE_RATE).toInt()
+        var seed = 12345; var lp = 0.0; var env = 1.0
+        val step = exp(-1.0 / (0.012 * SAMPLE_RATE))
+        for (k in 0 until SAMPLE_RATE / 20) {
+            val idx = s0 + k
+            if (idx >= buf.size) break
+            seed = seed * 1103515245 + 12345
+            val n = ((seed ushr 16) and 0x7fff) / 16384.0 - 1.0
+            lp += 0.35 * (n - lp)
+            if (idx >= 0) buf[idx] += (gain * env * (n - lp)).toFloat()
+            env *= step
+        }
+    }
+
+    /** Notes to hear for a rhythm slash at [tick] of measure [mi]: the chord in force there, or empty (= click). */
+    fun slashNotes(score: Score, mi: Int, tick: Int): List<Int> {
+        val text = score.measures.getOrNull(mi)?.chords?.filter { it.tick <= tick }?.maxByOrNull { it.tick }?.text
+            ?: (mi - 1 downTo 0).firstNotNullOfOrNull { i -> score.measures[i].chords.maxByOrNull { it.tick }?.text }
+            ?: return emptyList()
+        val (bass, notes) = chordNotes(text) ?: return emptyList()
+        return listOf(bass) + notes
     }
 
     private fun chordNotes(text: String): Pair<Int, List<Int>>? {
@@ -100,7 +133,8 @@ object Synth {
     /** Short sound of one note or chord, to hear what was just written. */
     fun preview(midis: List<Int>, seconds: Double = 0.6): ShortArray {
         val buf = FloatArray(((seconds + 0.15) * SAMPLE_RATE).toInt())
-        midis.forEach { tone(buf, 0.0, seconds, it, 0.25) }
+        if (midis.isEmpty()) click(buf, 0.0, 0.6)
+        midis.forEach { tone(buf, 0.0, seconds, it, if (midis.size > 2) 0.12 else 0.25) }
         return ShortArray(buf.size) { (tanh(buf[it] * 1.5) * 30_000).toInt().toShort() }
     }
 
@@ -152,10 +186,13 @@ object Synth {
                         if (e.tieToNext) { tied += p.midi; total += du } // ponytail: a tie extends one more value, enough for most ties
                         tone(buf, st, total, p.midi, 0.22)
                     }
-                    EventKind.SLASH -> chordAt(tick)?.let { c ->
-                        val (bass, notes) = chordNotes(c) ?: return@let
-                        tone(buf, st, du * 0.9, bass, 0.10)
-                        notes.forEachIndexed { k, n -> tone(buf, st + k * 0.012, du * 0.9, n, 0.07) }
+                    EventKind.SLASH -> {
+                        val notes = chordAt(tick)?.let { chordNotes(it) }
+                        if (notes == null) click(buf, st, 0.5) // no chord yet: the rhythm is still heard
+                        else {
+                            tone(buf, st, du * 0.9, notes.first, 0.10)
+                            notes.second.forEachIndexed { k, n -> tone(buf, st + k * 0.012, du * 0.9, n, 0.07) }
+                        }
                     }
                     EventKind.REST -> {}
                 }

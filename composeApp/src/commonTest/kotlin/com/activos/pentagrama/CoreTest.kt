@@ -186,4 +186,20 @@ class CoreTest {
         }
         assertEquals(List(4) { NoteValue.QUARTER }, score.measures[0].events.map { it.value })
     }
+
+    @Test
+    fun laBarraRitmicaSeEscucha() {
+        val slashes = Measure(events = List(4) { Event(EventKind.SLASH, NoteValue.QUARTER) })
+        // Sin acorde: suena un golpe por cada barra. Con acorde: suena el acorde.
+        for (m in listOf(slashes, slashes.copy(chords = listOf(com.activos.pentagrama.model.ChordMark(0, "G"))))) {
+            val r = Synth.render(Score(tempoBpm = 120, measures = listOf(m)))
+            for (beat in 0 until 4) {
+                val at = (beat * 0.5 * r.sampleRate).toInt()
+                val peak = (at until at + r.sampleRate / 20).maxOf { kotlin.math.abs(r.pcm[it].toInt()) }
+                assertTrue(peak > 1_000, "la barra $beat no suena (pico $peak)")
+            }
+        }
+        assertTrue(Synth.preview(emptyList()).any { kotlin.math.abs(it.toInt()) > 1_000 })
+        assertEquals(4, Synth.slashNotes(Score(measures = listOf(Measure(chords = listOf(com.activos.pentagrama.model.ChordMark(0, "G"))), slashes)), 1, 0).size)
+    }
 }
