@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -88,11 +89,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.TimeSource
 import com.activos.pentagrama.platform.rememberFileSaver
 import com.activos.pentagrama.render.ScoreCanvas
 import com.activos.pentagrama.render.ScoreColors
 import com.activos.pentagrama.render.ScoreLayout
+import com.activos.pentagrama.render.ScorePdf
 import com.activos.pentagrama.symbols.SymbolAction
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,13 +127,16 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
             try {
                 val r = withContext(Dispatchers.Default) { Synth.render(state.score, from) }
                 AudioPlayer.play(r.pcm, r.sampleRate)
-                val clock = TimeSource.Monotonic.markNow()
-                for ((m, start) in r.measureStarts) {
-                    val wait = (start * 1000).toLong() - clock.elapsedNow().inWholeMilliseconds
-                    if (wait > 0) delay(wait)
-                    state.selection = Selection(m)
+                // Follow what the speaker is actually playing (device position), note by note.
+                val total = r.pcm.size.toDouble() / r.sampleRate
+                var i = -1
+                while (true) {
+                    val pos = AudioPlayer.positionSeconds() ?: break
+                    while (i + 1 < r.cues.size && r.cues[i + 1].sec <= pos) i++
+                    r.cues.getOrNull(i)?.let { c -> if (state.selection != Selection(c.measure, c.event)) state.selection = Selection(c.measure, c.event) }
+                    if (pos >= total - 0.05) break
+                    delay(30)
                 }
-                delay(r.pcm.size * 1000L / r.sampleRate - clock.elapsedNow().inWholeMilliseconds)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -144,6 +148,17 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
         }
     }
     DisposableEffect(Unit) { onDispose { AudioPlayer.stop() } }
+
+    // ---- PDF para imprimir
+    val pdfMeasurer = rememberTextMeasurer()
+    val musicFont = LocalMusicFont.current
+    val density = LocalDensity.current
+    fun exportPdf() = scope.launch {
+        state.message = "Preparando PDF…"
+        runCatching { withContext(Dispatchers.Default) { ScorePdf.export(state.score, pdfMeasurer, musicFont, density) } }
+            .onSuccess { saver.save(fileNameOf(state.score, "pdf"), "application/pdf", it) }
+            .onFailure { state.message = "No se pudo crear el PDF: ${it.message}" }
+    }
     val transcribe = rememberTranscription { r ->
         state.updateScore { r.score }
         state.message = "Transcripción lista: ${r.notes} notas, ${r.chords} acordes, ♩=${r.bpm}, ${r.key}"
@@ -182,13 +197,14 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                                 menu = false; state.updateScore { ScoreOps.fillSlashes(it) }
                             })
                             HorizontalDivider()
+                            DropdownMenuItem({ Text("Exportar PDF (para imprimir)") }, { menu = false; exportPdf() })
                             DropdownMenuItem({ Text("Exportar MusicXML (MuseScore, Finale…)") }, {
                                 menu = false
-                                saver.save(fileNameOf(state.score, "musicxml"), "application/vnd.recordare.musicxml+xml", MusicXml.export(state.score))
+                                saver.save(fileNameOf(state.score, "musicxml"), "application/vnd.recordare.musicxml+xml", MusicXml.export(state.score).encodeToByteArray())
                             })
                             DropdownMenuItem({ Text("Exportar archivo .pentagrama") }, {
                                 menu = false
-                                saver.save(fileNameOf(state.score, "pentagrama"), "application/json", ScoreJson.encode(state.score))
+                                saver.save(fileNameOf(state.score, "pentagrama"), "application/json", ScoreJson.encode(state.score).encodeToByteArray())
                             })
                         }
                     }
@@ -204,14 +220,14 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                 Row(Modifier.fillMaxSize()) {
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         EditToolbar(state)
-                        ScoreView(state, Modifier.weight(1f).fillMaxWidth())
+                        ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
                     }
                     VerticalDivider()
                     SymbolPalette(state.tool.id, state::choose, Modifier.width(360.dp).fillMaxHeight())
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
-                    ScoreView(state, Modifier.weight(1f).fillMaxWidth())
+                    ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
                     HorizontalDivider()
                     EditToolbar(state)
                     SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxWidth().height(paletteHeight))
@@ -235,7 +251,7 @@ private fun fileNameOf(score: Score, ext: String) =
     score.title.ifBlank { "partitura" }.replace(Regex("[^A-Za-z0-9áéíóúñÁÉÍÓÚÑ _-]"), "").trim().replace(' ', '_') + "." + ext
 
 @Composable
-private fun ScoreView(state: EditorState, modifier: Modifier) {
+private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = false) {
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
     val colors = ScoreColors(
@@ -250,7 +266,18 @@ private fun ScoreView(state: EditorState, modifier: Modifier) {
         val s = baseSpace * state.zoom
         val layout = remember(state.score, widthPx, s) { ScoreLayout.build(state.score, widthPx, s) }
         val heightDp = with(density) { layout.height.toDp() }
-        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        val scroll = rememberScrollState()
+        val viewportPx = with(density) { maxHeight.toPx() }
+        // While playing, keep the line that is sounding on screen.
+        LaunchedEffect(state.selection, follow) {
+            if (!follow) return@LaunchedEffect
+            val sys = state.selection?.let { layout.measureLayout(it.measure)?.first } ?: return@LaunchedEffect
+            val sysH = com.activos.pentagrama.render.Dim.SYSTEM_HEIGHT * layout.s
+            if (sys.top < scroll.value || sys.top + sysH > scroll.value + viewportPx) {
+                scroll.animateScrollTo((sys.top - viewportPx * 0.15f).toInt().coerceAtLeast(0))
+            }
+        }
+        Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
             ScoreCanvas(
                 score = state.score, layout = layout, musicFont = LocalMusicFont.current, colors = colors,
                 selection = state.selection, onTap = state::tap,

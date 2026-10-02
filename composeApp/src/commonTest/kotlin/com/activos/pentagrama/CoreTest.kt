@@ -146,4 +146,16 @@ class CoreTest {
         assertTrue(Synth.render(Templates.demoChart()).pcm.any { it > 1000 })
         assertEquals(listOf(9, 3), Synth.parseChord("Am7")?.let { listOf(it.first, it.second[1]) })
     }
+
+    @Test
+    fun pdfValidoYReproduccionNotaPorNota() {
+        val pdf = com.activos.pentagrama.render.PdfWriter.write(listOf(Triple(ByteArray(10), 4, 4), Triple(ByteArray(10), 4, 4))).decodeToString()
+        assertTrue(pdf.startsWith("%PDF-1.4") && "/Count 2" in pdf)
+        val xref = pdf.substringAfter("startxref\n").substringBefore("\n").toInt()
+        assertTrue(pdf.substring(xref).startsWith("xref"))
+
+        val cues = Synth.render(Templates.demoChart()).cues
+        assertTrue(cues.size > 100 && cues.zipWithNext().all { it.first.sec <= it.second.sec })
+        assertEquals(0, cues.first().event)
+    }
 }

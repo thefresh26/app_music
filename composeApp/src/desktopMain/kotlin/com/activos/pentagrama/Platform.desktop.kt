@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.asSkiaBitmap
 import com.activos.pentagrama.audio.MonoDownsampler
 import com.activos.pentagrama.audio.PcmAudio
 import com.activos.pentagrama.model.ScoreJson
@@ -66,12 +67,18 @@ actual object AudioPlayer {
         }
     }
 
+    actual fun positionSeconds(): Double? = line?.let { it.microsecondPosition / 1_000_000.0 }
+
     actual fun stop() {
         val l = line ?: return
         line = null
         runCatching { l.stop(); l.flush(); l.close() }
     }
 }
+
+actual fun encodeJpeg(image: androidx.compose.ui.graphics.ImageBitmap, quality: Int): ByteArray =
+    org.jetbrains.skia.Image.makeFromBitmap(image.asSkiaBitmap())
+        .encodeToData(org.jetbrains.skia.EncodedImageFormat.JPEG, quality)!!.bytes
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 actual val platformName: String = "Desktop"
@@ -172,7 +179,7 @@ actual fun rememberFileSaver(onResult: (String) -> Unit): FileSaver {
     return remember {
         FileSaver { fileName, _, content ->
             val f = chooseFile("Guardar como", save = true, suggested = fileName) ?: return@FileSaver
-            runCatching { f.writeText(content) }
+            runCatching { f.writeBytes(content) }
                 .onSuccess { cb("Guardado en ${f.absolutePath}") }
                 .onFailure { cb("No se pudo guardar: ${it.message}") }
         }

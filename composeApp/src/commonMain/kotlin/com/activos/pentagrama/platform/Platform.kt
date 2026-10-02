@@ -36,7 +36,7 @@ expect fun rememberAudioPicker(onPicked: (AudioSource) -> Unit): () -> Unit
 
 /** Saves text content to a user-chosen file. */
 fun interface FileSaver {
-    fun save(fileName: String, mime: String, content: String)
+    fun save(fileName: String, mime: String, content: ByteArray)
 }
 
 @Composable
@@ -50,7 +50,12 @@ expect fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit
 expect object AudioPlayer {
     fun play(pcm: ShortArray, sampleRate: Int)
     fun stop()
+    /** Seconds actually played by the audio device, or null when nothing is playing. */
+    fun positionSeconds(): Double?
 }
+
+/** JPEG bytes of an image (used to print the score to PDF). */
+expect fun encodeJpeg(image: androidx.compose.ui.graphics.ImageBitmap, quality: Int): ByteArray
 
 expect fun currentTimeMillis(): Long
 

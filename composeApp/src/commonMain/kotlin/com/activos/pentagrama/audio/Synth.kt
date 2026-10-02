@@ -13,8 +13,11 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tanh
 
-/** Rendered audio plus when each measure starts (to follow the playback on screen). */
-class Rendered(val pcm: ShortArray, val sampleRate: Int, val measureStarts: List<Pair<Int, Double>>)
+/** Something to highlight while playing: measure, event index (null = whole measure) and start time in seconds. */
+data class Cue(val measure: Int, val event: Int?, val sec: Double)
+
+/** Rendered audio plus cues to follow the playback on screen, note by note. */
+class Rendered(val pcm: ShortArray, val sampleRate: Int, val measureStarts: List<Pair<Int, Double>>, val cues: List<Cue>)
 
 /**
  * Turns a score into sound: melody notes, chord symbols (pad, or strummed on rhythm slashes) and a bass root.
@@ -101,6 +104,7 @@ object Synth {
         val order = playbackOrder(score, fromMeasure)
         val buf = FloatArray(((order.size * measureSec + 1.0) * sr).toInt().coerceAtMost(sr * 60 * 30))
         val starts = mutableListOf<Pair<Int, Double>>()
+        val cues = mutableListOf<Cue>()
 
         var t0 = 0.0
         var lastContent: Measure? = null
@@ -111,6 +115,7 @@ object Synth {
             starts += mi to t0
             val written = score.measures[mi]
             val m = if (written.repeatMeasure) (lastContent ?: written) else written.also { lastContent = it }
+            if (written.events.isEmpty()) cues += Cue(mi, null, t0)
 
             // Chord symbols: strum on slashes, otherwise sustained pad until the next chord.
             val chords = m.chords.sortedBy { it.tick }
@@ -129,8 +134,9 @@ object Synth {
             }
 
             var tick = 0
-            for (e in m.events) {
+            for ((ei, e) in m.events.withIndex()) {
                 val st = t0 + tick * secPerTick
+                if (!written.repeatMeasure) cues += Cue(mi, ei, st)
                 val du = e.ticks * secPerTick
                 when (e.kind) {
                     EventKind.NOTE -> e.pitches.forEach { p ->
@@ -154,6 +160,6 @@ object Synth {
 
         val end = min(buf.size, ((t0 + 0.5) * sr).toInt())
         val pcm = ShortArray(end) { (tanh(buf[it] * 1.5) * 30_000).toInt().toShort() }
-        return Rendered(pcm, sr, starts)
+        return Rendered(pcm, sr, starts, cues)
     }
 }

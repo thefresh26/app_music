@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
 import com.activos.pentagrama.audio.MonoDownsampler
 import com.activos.pentagrama.audio.PcmAudio
@@ -85,12 +86,19 @@ actual object AudioPlayer {
         }
     }
 
+    actual fun positionSeconds(): Double? = track?.let { it.playbackHeadPosition.toDouble() / it.sampleRate }
+
     actual fun stop() {
         val t = track ?: return
         track = null
         runCatching { t.pause(); t.flush(); t.release() }
     }
 }
+
+actual fun encodeJpeg(image: androidx.compose.ui.graphics.ImageBitmap, quality: Int): ByteArray =
+    java.io.ByteArrayOutputStream().also {
+        image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, it)
+    }.toByteArray()
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 
@@ -218,12 +226,12 @@ actual fun rememberAudioPicker(onPicked: (AudioSource) -> Unit): () -> Unit {
 actual fun rememberFileSaver(onResult: (String) -> Unit): FileSaver {
     val context = LocalContext.current
     val cb by rememberUpdatedState(onResult)
-    var pending by remember { mutableStateOf<String?>(null) }
+    var pending by remember { mutableStateOf<ByteArray?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val content = pending
         pending = null
         if (uri != null && content != null) {
-            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) } }
+            runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(content) } }
                 .onSuccess { cb("Archivo guardado") }
                 .onFailure { cb("No se pudo guardar: ${it.message}") }
         }

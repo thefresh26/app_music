@@ -79,7 +79,7 @@ fun ScoreCanvas(
 }
 
 /** Draws a laid-out score. SMuFL glyphs are drawn with their baseline on the staff position they refer to. */
-private class ScorePainter(
+internal class ScorePainter(
     val ds: DrawScope,
     val measurer: TextMeasurer,
     val musicFont: FontFamily,
