@@ -94,7 +94,12 @@ import com.activos.pentagrama.render.ScoreCanvas
 import com.activos.pentagrama.render.ScoreColors
 import com.activos.pentagrama.render.ScoreLayout
 import com.activos.pentagrama.render.ScorePdf
+import com.activos.pentagrama.model.EventKind
+import com.activos.pentagrama.model.NoteValue
+import com.activos.pentagrama.symbols.G
 import com.activos.pentagrama.symbols.SymbolAction
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.Info
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,6 +164,8 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
             .onSuccess { saver.save(fileNameOf(state.score, "pdf"), "application/pdf", it) }
             .onFailure { state.message = "No se pudo crear el PDF: ${it.message}" }
     }
+    state.onAudition = { midis -> if (playJob == null) runCatching { AudioPlayer.play(Synth.preview(midis), Synth.SAMPLE_RATE) } }
+    var showHelp by remember { mutableStateOf(false) }
     val transcribe = rememberTranscription { r ->
         state.updateScore { r.score }
         state.message = "Transcripción lista: ${r.notes} notas, ${r.chords} acordes, ♩=${r.bpm}, ${r.key}"
@@ -188,6 +195,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                     IconButton(onClick = state::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Deshacer") }
                     IconButton(onClick = state::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Rehacer") }
                     IconButton(onClick = { save() }) { Icon(Icons.Filled.Save, "Guardar") }
+                    IconButton(onClick = { showHelp = true }) { Icon(Icons.AutoMirrored.Filled.HelpOutline, "Ayuda") }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más") }
                         DropdownMenu(menu, { menu = false }) {
@@ -220,6 +228,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                 Row(Modifier.fillMaxSize()) {
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         EditToolbar(state)
+                        HintBar(state)
                         ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
                     }
                     VerticalDivider()
@@ -230,6 +239,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                     ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
                     HorizontalDivider()
                     EditToolbar(state)
+                    HintBar(state)
                     SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxWidth().height(paletteHeight))
                 }
             }
@@ -237,6 +247,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     }
 
     state.pendingText?.let { p -> TextEntryDialog(p.action, p.initial, onDismiss = { state.pendingText = null }, onConfirm = state::confirmText) }
+    if (showHelp) HelpDialog { showHelp = false }
     if (showProps) PropertiesDialog(state.score, onDismiss = { showProps = false }) { s -> showProps = false; state.updateScore { s } }
     if (confirmExit) AlertDialog(
         onDismissRequest = { confirmExit = false },
@@ -259,7 +270,7 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
         selection = cs.primary.copy(alpha = 0.18f), measureSelection = cs.primary.copy(alpha = 0.07f),
         overfull = Color(0x22E53935), section = Color(0xFFE9F76B), sectionText = Color(0xFF1B1B1B),
         chord = Color(0xFF111111), paper = Color(0xFFFFFFFF), muted = Color(0xFF666666),
-        guide = cs.primary.copy(alpha = 0.22f),
+        guide = cs.primary.copy(alpha = 0.22f), accent = cs.primary,
     )
     BoxWithConstraints(modifier.background(Color(0xFFE9EAEE))) {
         val widthPx = with(density) { maxWidth.toPx() }
@@ -283,6 +294,14 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
                 score = state.score, layout = layout, musicFont = LocalMusicFont.current, colors = colors,
                 selection = state.selection, onTap = state::tap,
                 modifier = Modifier.fillMaxWidth().height(heightDp).testTag("score"),
+                ghostGlyph = (state.tool.action as? SymbolAction.PlaceEvent)?.takeIf { it.kind == EventKind.NOTE }?.let {
+                    when (it.value) {
+                        NoteValue.DOUBLE_WHOLE -> G.HEAD_DOUBLE_WHOLE
+                        NoteValue.WHOLE -> G.HEAD_WHOLE
+                        NoteValue.HALF -> G.HEAD_HALF
+                        else -> G.HEAD_BLACK
+                    }
+                },
             )
         }
     }
@@ -302,6 +321,7 @@ private fun EditToolbar(state: EditorState) {
                 Text("Herramienta: " + state.tool.nameEs, maxLines = 1, fontWeight = FontWeight.SemiBold)
             })
             FilterChip(state.chordMode, { state.chordMode = !state.chordMode }, label = { Text("Modo acorde") })
+            FilterChip(state.soundOn, { state.soundOn = !state.soundOn }, label = { Text(if (state.soundOn) "Sonido: sí" else "Sonido: no") })
             IconButton(onClick = { state.moveSelected(1) }, enabled = hasEvent) { Icon(Icons.Filled.ArrowUpward, "Subir nota") }
             IconButton(onClick = { state.moveSelected(-1) }, enabled = hasEvent) { Icon(Icons.Filled.ArrowDownward, "Bajar nota") }
             IconButton(onClick = { state.deleteSelected() }, enabled = sel != null) { Icon(Icons.Filled.Delete, "Borrar selección") }
@@ -407,3 +427,67 @@ private fun PropertiesDialog(score: Score, onDismiss: () -> Unit, onSave: (Score
 
 @Suppress("unused")
 private fun Selection?.describe(): String = this?.let { "Compás ${it.measure + 1}" } ?: ""
+
+/** One line that always tells the user what the current tool does and what to do next. */
+fun hintFor(state: EditorState): String {
+    val n = state.tool.nameEs
+    return when (val a = state.tool.action) {
+        is SymbolAction.PlaceEvent -> when (a.kind) {
+            EventKind.NOTE -> "Toca el pentagrama donde quieras la $n. La línea o espacio decide la nota (Do, Re, Mi…); las rayas de color son los tiempos libres." +
+                if (state.chordMode) " Modo acorde: toca encima de una nota para sumarle otra." else ""
+            EventKind.REST -> "Toca un tiempo del compás para poner el $n."
+            EventKind.SLASH -> "Toca un tiempo del compás para poner la barra rítmica."
+        }
+        is SymbolAction.Accidental -> "Toca una nota para ponerle $n (o selecciónala y luego elige la alteración)."
+        SymbolAction.ToggleDot, SymbolAction.ToggleTie, SymbolAction.ToggleTriplet, is SymbolAction.SetHead, is SymbolAction.Attach ->
+            "Toca una nota para aplicarle: $n."
+        is SymbolAction.SetClef, is SymbolAction.SetKey, is SymbolAction.SetTime -> "$n se aplica a toda la partitura."
+        is SymbolAction.SetStartBar, is SymbolAction.SetEndBar, is SymbolAction.MeasureMark, is SymbolAction.Ending, SymbolAction.MeasureRepeat ->
+            "Toca el compás donde quieres poner: $n."
+        SymbolAction.ChordSymbol -> "Toca encima del pentagrama, en el tiempo donde cambia el acorde, y escribe el cifrado (Am, G7, F#m…)."
+        SymbolAction.SectionLabel -> "Toca un compás para ponerle nombre de sección (Intro, Estrofa, Coro…)."
+        SymbolAction.FreeText -> "Toca un compás para escribirle un texto (x2, BASS, rit.…)."
+        SymbolAction.Lyric -> "Toca una nota para escribirle la letra."
+        is SymbolAction.Free -> "Toca el lugar del pentagrama donde quieres este símbolo."
+        SymbolAction.Eraser -> "Toca una nota, acorde o símbolo para borrarlo. ↶ deshace si te equivocas."
+        SymbolAction.Select -> "Toca una nota para seleccionarla y oírla. Luego usa ↑ ↓ para cambiar la altura o 🗑 para borrarla."
+    }
+}
+
+@Composable
+private fun HintBar(state: EditorState) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Info, null, Modifier.padding(end = 8.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(hintFor(state), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 3)
+        }
+    }
+}
+
+private val HELP_STEPS = listOf(
+    "Elige una figura" to "En la paleta (abajo en el celular, a la derecha en el PC) toca la figura que quieres: negra, blanca, silencio, sostenido… Si no la ves, búscala por nombre: \"calderón\", \"clave de fa\".",
+    "Toca el pentagrama" to "La nota cae en el tiempo (casilla) que tocaste; las rayas de color marcan los tiempos libres. La línea o espacio decide qué nota es. La vas a oír y verás su nombre (Sol4, Fa♯5…).",
+    "Corrige sin miedo" to "Con \"Seleccionar\" toca una nota: ↑ ↓ cambian su altura y 🗑 la borra. ↶ deshace y ↷ rehace cualquier cambio.",
+    "Acordes y secciones" to "En la categoría \"Cifrado y texto\": acordes (Am, G7), secciones (Intro, Coro) y textos (x2). Repeticiones, casillas 1/2 y Coda están en \"Barras\" y \"Navegación\".",
+    "Escucha lo que escribiste" to "▶ toca la partitura y va marcando la nota que suena. Si seleccionas un compás primero, empieza desde ahí.",
+    "Desde una canción" to "⋮ → \"Llenar desde MP3\": la app saca la melodía, el ritmo y los acordes. Revísalo y corrígelo aquí.",
+    "Guarda e imprime" to "💾 guarda en el dispositivo. ⋮ → \"Exportar PDF\" para imprimir o compartir; también MusicXML para MuseScore.",
+)
+
+@Composable
+fun HelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("¿Cómo se usa?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                HELP_STEPS.forEachIndexed { i, (t, d) ->
+                    Text("${i + 1}. $t", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(d, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 10.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Entendido") } },
+    )
+}
+

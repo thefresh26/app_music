@@ -42,6 +42,9 @@ private val STEP_SEMITONES = intArrayOf(0, 2, 4, 5, 7, 9, 11)
 val STEP_NAMES = arrayOf("C", "D", "E", "F", "G", "A", "B")
 val STEP_NAMES_ES = arrayOf("Do", "Re", "Mi", "Fa", "Sol", "La", "Si")
 
+/** Spanish name with accidental and octave, e.g. "Fa♯4", "Si♭3". */
+fun Pitch.nameEs(): String = STEP_NAMES_ES[step] + when (alter) { -2 -> "𝄫"; -1 -> "♭"; 1 -> "♯"; 2 -> "𝄪"; else -> "" } + octave
+
 /** A written pitch: diatonic step (0=C .. 6=B), octave (4 = middle C octave) and alteration in semitones. */
 data class Pitch(val step: Int, val octave: Int, val alter: Int = 0) {
     val diatonic: Int get() = octave * 7 + step

@@ -97,6 +97,13 @@ object Synth {
         return (r - 12) to iv.map { r + it }
     }
 
+    /** Short sound of one note or chord, to hear what was just written. */
+    fun preview(midis: List<Int>, seconds: Double = 0.6): ShortArray {
+        val buf = FloatArray(((seconds + 0.15) * SAMPLE_RATE).toInt())
+        midis.forEach { tone(buf, 0.0, seconds, it, 0.25) }
+        return ShortArray(buf.size) { (tanh(buf[it] * 1.5) * 30_000).toInt().toShort() }
+    }
+
     fun render(score: Score, fromMeasure: Int = 0): Rendered {
         val sr = SAMPLE_RATE
         val secPerTick = 60.0 / score.tempoBpm.coerceIn(20, 400) / TICKS_PER_QUARTER

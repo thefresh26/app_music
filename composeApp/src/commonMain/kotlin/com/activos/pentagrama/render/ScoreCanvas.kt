@@ -5,6 +5,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import com.activos.pentagrama.model.nameEs
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -54,6 +60,8 @@ data class ScoreColors(
     val chord: Color,
     val paper: Color,
     val muted: Color,
+    /** Ghost note and pitch names while editing. Transparent = off (print). */
+    val accent: Color = Color.Transparent,
     /** Faint lines that show the free beats ("casillas") where a tap places a note. Transparent = off (print). */
     val guide: Color = Color.Transparent,
 )
@@ -67,17 +75,38 @@ fun ScoreCanvas(
     selection: Selection?,
     onTap: (Hit) -> Unit,
     modifier: Modifier = Modifier,
+    /** Notehead of the note tool in use: shown as a "ghost" under the mouse with its name (Do4, Sol5…). */
+    ghostGlyph: Int? = null,
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 1024)
     val currentLayout by rememberUpdatedState(layout)
     val currentOnTap by rememberUpdatedState(onTap)
+    var hover by remember { mutableStateOf<Offset?>(null) }
     Canvas(
-        modifier.pointerInput(Unit) {
-            detectTapGestures { pos -> currentLayout.hitTest(pos.x, pos.y)?.let { currentOnTap(it) } }
-        }
+        modifier
+            .pointerInput(Unit) {
+                detectTapGestures { pos -> currentLayout.hitTest(pos.x, pos.y)?.let { currentOnTap(it) } }
+            }
+            .pointerInput(Unit) {
+                // Mouse hover only (desktop): touch has no hover, so the ghost never gets stuck on phones.
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Final)
+                        val ch = e.changes.firstOrNull() ?: continue
+                        hover = when {
+                            e.type == PointerEventType.Exit -> null
+                            ch.type == PointerType.Mouse -> ch.position
+                            else -> hover
+                        }
+                    }
+                }
+            }
     ) {
         drawRect(colors.paper)
-        ScorePainter(this, measurer, musicFont, colors, layout, selection).drawAll()
+        val painter = ScorePainter(this, measurer, musicFont, colors, layout, selection)
+        painter.drawAll()
+        val h = hover
+        if (h != null && ghostGlyph != null) layout.hitTest(h.x, h.y)?.let { painter.drawGhost(it, h.x, ghostGlyph) }
     }
 }
 
@@ -168,6 +197,12 @@ internal class ScorePainter(
                     ds.drawRoundRect(c.measureSelection, Offset(ml.x, sys.top + px(1f)), Size(ml.width, px(Dim.SYSTEM_HEIGHT - 2f)), CornerRadius(px(0.6f)))
                 } else ml.events.getOrNull(selection.event)?.let { el ->
                     ds.drawRoundRect(c.selection, Offset(el.x - px(0.3f), top - px(3f)), Size(max(el.width, px(1.8f)), px(10f)), CornerRadius(px(0.5f)))
+                    // Name of the selected note(s) under the staff, so the user always knows what is written.
+                    val ev = score.measures[ml.index].events.getOrNull(selection.event)
+                    if (c.accent.alpha > 0f && ev != null && ev.kind == EventKind.NOTE && ev.pitches.isNotEmpty()) {
+                        text(ev.pitches.sortedByDescending { it.diatonic }.joinToString(" ") { it.nameEs() },
+                            el.x, sys.staffBottom(s) + px(3.2f), 1.3f, c.accent, bold = true, serif = false)
+                    }
                 }
             }
         }
@@ -181,6 +216,22 @@ internal class ScorePainter(
             text("${sys.measures.first().index + 1}", x0, top - px(1.1f), 1.1f, c.muted, italic = true)
         }
         for (ml in sys.measures) drawMeasure(sys, ml)
+    }
+
+    /** Translucent notehead + ledger lines + pitch name where a tap would put the note. */
+    fun drawGhost(hit: Hit, x: Float, glyphCp: Int) {
+        val sys = layout.measureLayout(hit.measure)?.first ?: return
+        val w = glyphWidth(glyphCp)
+        val hx = x - w / 2
+        val y = sys.yForStep(hit.staffStep, s)
+        val col = c.accent.copy(alpha = 0.55f)
+        var l = -2
+        while (l >= hit.staffStep) { hline(hx - px(0.4f), hx + w + px(0.4f), sys.yForStep(l, s), 0.16f, col); l -= 2 }
+        l = 10
+        while (l <= hit.staffStep) { hline(hx - px(0.4f), hx + w + px(0.4f), sys.yForStep(l, s), 0.16f, col); l += 2 }
+        glyph(glyphCp, hx, y, col)
+        val name = com.activos.pentagrama.editor.ScoreOps.pitchForStep(score, hit.staffStep).nameEs()
+        text(name, hx + w + px(0.6f), y - px(0.8f), 1.3f, c.accent, bold = true, serif = false)
     }
 
     private fun clefGlyphAndStep(clef: Clef): Pair<Int, Int> = when (clef) {

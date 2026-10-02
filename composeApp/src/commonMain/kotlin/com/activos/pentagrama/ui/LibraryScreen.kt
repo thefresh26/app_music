@@ -77,6 +77,7 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
     var toDelete by remember { mutableStateOf<StoredScore?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
     var showPrivacy by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(info) { info?.let { snackbar.showSnackbar(it); info = null } }
 
@@ -96,7 +97,10 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("Pentagrama") },
-                actions = { IconButton(onClick = { showPrivacy = true }) { Icon(Icons.Filled.Info, "Privacidad") } },
+                actions = {
+                    TextButton(onClick = { showHelp = true }) { Text("¿Cómo se usa?") }
+                    IconButton(onClick = { showPrivacy = true }) { Icon(Icons.Filled.Info, "Privacidad") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             )
         },
@@ -124,6 +128,13 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
                 if (stored.isEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text("Aún no tienes partituras guardadas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Card(onClick = { showHelp = true }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                        Text(
+                            "¿Primera vez? Toca aquí y te explicamos en 7 pasos cómo escribir, escuchar e imprimir tu música.",
+                            Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
             }
             items(stored, key = { it.id }) { st ->
@@ -167,6 +178,7 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
         },
         confirmButton = { TextButton(onClick = { showPrivacy = false }) { Text("Entendido") } },
     )
+    if (showHelp) HelpDialog { showHelp = false }
     toDelete?.let { st ->
         AlertDialog(
             onDismissRequest = { toDelete = null },

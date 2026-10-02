@@ -22,6 +22,17 @@ class EditorState(initial: Score, val id: String) {
     var chordMode by mutableStateOf(false)
     var zoom by mutableStateOf(1f)
     var message by mutableStateOf<String?>(null)
+    /** Play each note while writing it (like pressing a piano key). */
+    var soundOn by mutableStateOf(true)
+    /** Set by the screen: plays the given MIDI notes. */
+    var onAudition: ((List<Int>) -> Unit)? = null
+
+    private fun auditionSelected() {
+        if (!soundOn) return
+        val sel = selection ?: return
+        val e = sel.event?.let { score.measures.getOrNull(sel.measure)?.events?.getOrNull(it) } ?: return
+        if (e.kind == EventKind.NOTE && e.pitches.isNotEmpty()) onAudition?.invoke(e.pitches.map { it.midi })
+    }
     var dirty by mutableStateOf(false)
     var pendingText by mutableStateOf<PendingText?>(null)
 
@@ -95,6 +106,7 @@ class EditorState(initial: Score, val id: String) {
         commit(r.score)
         selection = r.selection
         r.message?.let { message = it }
+        if (action is SymbolAction.PlaceEvent || action is SymbolAction.Accidental || action is SymbolAction.Select) auditionSelected()
     }
 
     fun confirmText(text: String) {
@@ -143,6 +155,7 @@ class EditorState(initial: Score, val id: String) {
         val e = sel.event?.let { score.measures[sel.measure].events.getOrNull(it) } ?: return
         if (e.kind != EventKind.NOTE) return
         commit(ScoreOps.transpose(score, sel, steps))
+        auditionSelected()
     }
 
     fun deleteSelected() {
