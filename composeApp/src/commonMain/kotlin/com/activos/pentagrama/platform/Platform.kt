@@ -46,6 +46,12 @@ expect fun rememberFileSaver(onResult: (String) -> Unit): FileSaver
 @Composable
 expect fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit): () -> Unit
 
+/** Plays mono 16-bit PCM (one sound at a time). */
+expect object AudioPlayer {
+    fun play(pcm: ShortArray, sampleRate: Int)
+    fun stop()
+}
+
 expect fun currentTimeMillis(): Long
 
 expect val platformName: String

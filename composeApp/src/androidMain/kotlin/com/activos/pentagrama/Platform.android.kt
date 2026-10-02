@@ -54,6 +54,44 @@ actual object ScoreStorage {
     actual fun delete(id: String) { file(id).delete() }
 }
 
+actual object AudioPlayer {
+    @Volatile private var track: android.media.AudioTrack? = null
+
+    actual fun play(pcm: ShortArray, sampleRate: Int) {
+        stop()
+        val min = android.media.AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val t = android.media.AudioTrack.Builder()
+            .setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder().setSampleRate(sampleRate).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
+            )
+            .setBufferSizeInBytes(maxOf(min, 16_384))
+            .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+            .build()
+        track = t
+        t.play()
+        kotlin.concurrent.thread(isDaemon = true) {
+            var off = 0
+            while (off < pcm.size && track === t) {
+                val n = t.write(pcm, off, minOf(4_096, pcm.size - off))
+                if (n <= 0) break
+                off += n
+            }
+        }
+    }
+
+    actual fun stop() {
+        val t = track ?: return
+        track = null
+        runCatching { t.pause(); t.flush(); t.release() }
+    }
+}
+
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 
 /** Reads at most [limit] bytes (InputStream.readNBytes needs API 33). */

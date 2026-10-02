@@ -1,6 +1,12 @@
 package com.activos.pentagrama
 
 import com.activos.pentagrama.audio.MonoDownsampler
+import com.activos.pentagrama.audio.Synth
+import com.activos.pentagrama.model.EndBar
+import com.activos.pentagrama.model.Event
+import com.activos.pentagrama.model.Measure
+import com.activos.pentagrama.model.NoteValue
+import com.activos.pentagrama.model.StartBar
 import com.activos.pentagrama.audio.TranscribeMode
 import com.activos.pentagrama.audio.TranscribeOptions
 import com.activos.pentagrama.audio.Transcriber
@@ -120,5 +126,24 @@ class CoreTest {
         val r = Transcriber.transcribe(ds.result("rep.mp3"), TranscribeOptions(mode = TranscribeMode.MELODY, bpm = 120))
         val first = r.score.measures.first().events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi }
         assertEquals(listOf(67, 67, 67, 67), first)
+    }
+
+    @Test
+    fun reproduccionSuenaYRespetaRepeticiones() {
+        // |: 1 | 2 (casilla 1) :| 3 (casilla 2) | 4  ->  1 2 1 3 4
+        val rep = Score(measures = listOf(Measure(startBar = StartBar.REPEAT_START), Measure(ending = "1.", endBar = EndBar.REPEAT_END), Measure(ending = "2."), Measure()))
+        assertEquals(listOf(0, 1, 0, 2, 3), Synth.playbackOrder(rep))
+
+        // Una redonda de Do4 a 60 BPM: 4 s de audio a ~261,6 Hz
+        val c4 = Score(tempoBpm = 60, measures = listOf(Measure(events = listOf(Event(EventKind.NOTE, NoteValue.WHOLE, listOf(Pitch(0, 4)))))))
+        val r = Synth.render(c4)
+        assertTrue(r.pcm.size >= 4 * r.sampleRate)
+        var zc = 0
+        for (i in 1 until r.sampleRate) if ((r.pcm[i - 1] < 0) != (r.pcm[i] < 0)) zc++
+        assertTrue(zc / 2 in 255..268, "frecuencia=${zc / 2}")
+
+        // El ejemplo (acordes + barras rítmicas) produce sonido
+        assertTrue(Synth.render(Templates.demoChart()).pcm.any { it > 1000 })
+        assertEquals(listOf(9, 3), Synth.parseChord("Am7")?.let { listOf(it.first, it.second[1]) })
     }
 }

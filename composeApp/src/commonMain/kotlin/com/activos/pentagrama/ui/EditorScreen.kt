@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.ZoomIn
@@ -52,7 +54,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,7 +80,15 @@ import com.activos.pentagrama.model.MusicXml
 import com.activos.pentagrama.model.Score
 import com.activos.pentagrama.model.ScoreJson
 import com.activos.pentagrama.model.keyName
+import com.activos.pentagrama.audio.Synth
+import com.activos.pentagrama.platform.AudioPlayer
 import com.activos.pentagrama.platform.ScoreStorage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.time.TimeSource
 import com.activos.pentagrama.platform.rememberFileSaver
 import com.activos.pentagrama.render.ScoreCanvas
 import com.activos.pentagrama.render.ScoreColors
@@ -102,6 +114,36 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     }
 
     val saver = rememberFileSaver { state.message = it }
+
+    // ---- Reproducción: sintetiza la partitura y resalta el compás que suena.
+    val scope = rememberCoroutineScope()
+    var playJob by remember { mutableStateOf<Job?>(null) }
+    fun stopPlayback() { playJob?.cancel(); playJob = null; AudioPlayer.stop() }
+    fun play() {
+        stopPlayback()
+        val from = state.selection?.measure ?: 0
+        playJob = scope.launch {
+            try {
+                val r = withContext(Dispatchers.Default) { Synth.render(state.score, from) }
+                AudioPlayer.play(r.pcm, r.sampleRate)
+                val clock = TimeSource.Monotonic.markNow()
+                for ((m, start) in r.measureStarts) {
+                    val wait = (start * 1000).toLong() - clock.elapsedNow().inWholeMilliseconds
+                    if (wait > 0) delay(wait)
+                    state.selection = Selection(m)
+                }
+                delay(r.pcm.size * 1000L / r.sampleRate - clock.elapsedNow().inWholeMilliseconds)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state.message = "No se pudo reproducir: ${e.message}"
+            } finally {
+                // Only the job that is still current may stop the sound (a newer Play may already be running).
+                if (playJob === coroutineContext[Job]) { AudioPlayer.stop(); playJob = null }
+            }
+        }
+    }
+    DisposableEffect(Unit) { onDispose { AudioPlayer.stop() } }
     val transcribe = rememberTranscription { r ->
         state.updateScore { r.score }
         state.message = "Transcripción lista: ${r.notes} notas, ${r.chords} acordes, ♩=${r.bpm}, ${r.key}"
@@ -125,6 +167,9 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { if (playJob != null) stopPlayback() else play() }) {
+                        if (playJob != null) Icon(Icons.Filled.Stop, "Detener") else Icon(Icons.Filled.PlayArrow, "Reproducir")
+                    }
                     IconButton(onClick = state::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Deshacer") }
                     IconButton(onClick = state::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Rehacer") }
                     IconButton(onClick = { save() }) { Icon(Icons.Filled.Save, "Guardar") }

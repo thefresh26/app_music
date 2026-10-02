@@ -47,6 +47,32 @@ actual object ScoreStorage {
     actual fun delete(id: String) { file(id).delete() }
 }
 
+actual object AudioPlayer {
+    @Volatile private var line: javax.sound.sampled.SourceDataLine? = null
+
+    actual fun play(pcm: ShortArray, sampleRate: Int) {
+        stop()
+        val fmt = AudioFormat(sampleRate.toFloat(), 16, 1, true, false)
+        val l = AudioSystem.getSourceDataLine(fmt)
+        l.open(fmt)
+        l.start()
+        line = l
+        val bytes = ByteArray(pcm.size * 2)
+        for (i in pcm.indices) { bytes[2 * i] = pcm[i].toByte(); bytes[2 * i + 1] = (pcm[i].toInt() shr 8).toByte() }
+        kotlin.concurrent.thread(isDaemon = true) {
+            var off = 0
+            while (off < bytes.size && line === l) off += l.write(bytes, off, minOf(8_192, bytes.size - off))
+            if (line === l) { l.drain(); line = null; l.close() }
+        }
+    }
+
+    actual fun stop() {
+        val l = line ?: return
+        line = null
+        runCatching { l.stop(); l.flush(); l.close() }
+    }
+}
+
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 actual val platformName: String = "Desktop"
 
