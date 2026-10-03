@@ -92,7 +92,10 @@ compose.desktop {
             description = "Editor de partituras y transcripción de audio"
             vendor = "Activos por Colombia"
             modules("java.desktop")
+            linux { iconFile.set(project.file("icons/pentagrama.png")) }
+            macOS { iconFile.set(project.file("icons/pentagrama.icns")) }
             windows {
+                iconFile.set(project.file("icons/pentagrama.ico"))
                 menu = true
                 shortcut = true
                 dirChooser = true

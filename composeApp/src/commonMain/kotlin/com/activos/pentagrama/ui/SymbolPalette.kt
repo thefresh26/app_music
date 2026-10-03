@@ -1,6 +1,16 @@
 package com.activos.pentagrama.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.graphics.graphicsLayer
+import com.activos.pentagrama.Paper
+import com.activos.pentagrama.pressScale
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -101,10 +111,16 @@ fun SymbolPalette(
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Clear, "Limpiar") } },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            shape = CircleShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedBorderColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
         )
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 8.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item { FilterChip(category == null, { category = null }, label = { Text("Todas") }) }
@@ -125,30 +141,36 @@ fun SymbolPalette(
                 }
             }
             items(results, key = { it.id }) { sym ->
-                SymbolCell(sym, sym.id == selectedId) { onSelect(sym) }
+                SymbolCell(sym, sym.id == selectedId, Modifier.animateItem(fadeInSpec = tween(220), placementSpec = tween(260, easing = Paper.Ease), fadeOutSpec = tween(120))) { onSelect(sym) }
             }
         }
     }
 }
 
 @Composable
-private fun SymbolCell(sym: MusicSymbol, selected: Boolean, onClick: () -> Unit) {
+private fun SymbolCell(sym: MusicSymbol, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(if (selected) cs.primaryContainer else cs.surfaceContainerHigh, tween(200))
+    val line by animateColorAsState(if (selected) cs.primary else Color.Transparent, tween(200))
+    val pop by animateFloatAsState(if (selected) 1.06f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f))
+    val src = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) cs.primaryContainer else cs.surface,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) cs.primary else cs.outlineVariant),
+        shape = RoundedCornerShape(14.dp),
+        color = bg,
+        border = BorderStroke(2.dp, line),
+        interactionSource = src,
+        modifier = modifier.pressScale(src).graphicsLayer { scaleX = pop; scaleY = pop },
     ) {
         Column(Modifier.padding(4.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                if (sym.glyph.isNotEmpty()) GlyphView(sym.glyph, 44.dp, cs.onSurface)
-                else Text(sym.label ?: "?", fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif, fontSize = 16.sp, maxLines = 1)
+                if (sym.glyph.isNotEmpty()) GlyphView(sym.glyph, 44.dp, if (selected) cs.onPrimaryContainer else cs.onSurface)
+                else Text(sym.label ?: "?", style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp), maxLines = 1)
             }
             Spacer(Modifier.height(2.dp))
             Text(
                 sym.nameEs, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp),
-                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, color = cs.onSurfaceVariant,
             )
         }
     }

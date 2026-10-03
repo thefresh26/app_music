@@ -1,6 +1,21 @@
 package com.activos.pentagrama.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -94,14 +109,17 @@ fun rememberTranscription(onDone: (TranscriptionResult) -> Unit): () -> Unit {
         )
     }
     if (running) {
+        val wave by rememberInfiniteTransition().animateFloat(0.7f, 1.15f, infiniteRepeatable(tween(520), RepeatMode.Reverse))
         AlertDialog(
             onDismissRequest = {},
+            icon = { Icon(Icons.Filled.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.graphicsLayer { scaleY = wave }) },
             title = { Text("Transcribiendo…") },
             text = {
                 Column {
                     Text(status, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
-                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                    val shown by animateFloatAsState(progress, tween(300))
+                    LinearProgressIndicator(progress = { shown }, modifier = Modifier.fillMaxWidth().height(8.dp), strokeCap = StrokeCap.Round, gapSize = 0.dp, drawStopIndicator = {})
                     Spacer(Modifier.height(8.dp))
                     Text("${(progress * 100).toInt()} %", style = MaterialTheme.typography.labelMedium)
                 }
@@ -115,7 +133,8 @@ fun rememberTranscription(onDone: (TranscriptionResult) -> Unit): () -> Unit {
             onDismissRequest = { errorMsg = null },
             title = { Text("No se pudo transcribir") },
             text = { Text(it) },
-            confirmButton = { TextButton(onClick = { errorMsg = null }) { Text("Aceptar") } },
+            icon = { Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error) },
+            confirmButton = { Button(onClick = { errorMsg = null }) { Text("Aceptar") } },
         )
     }
     return picker
@@ -132,35 +151,29 @@ private fun TranscribeOptionsDialog(fileName: String, onDismiss: () -> Unit, onS
         title = { Text("Llenar el pentagrama desde audio") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(fileName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(fileName, style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp), color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(8.dp))
-                Text("¿Qué quieres obtener?", style = MaterialTheme.typography.labelLarge)
-                TranscribeMode.entries.forEach { m ->
-                    Row(
-                        Modifier.fillMaxWidth().selectable(selected = mode == m, onClick = { mode = m }).padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = mode == m, onClick = { mode = m })
-                        Text(m.es)
-                    }
+                SectionLabel("¿Qué quieres obtener?")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TranscribeMode.entries.forEach { m -> TemplateTile(m.es, mode == m, Modifier.fillMaxWidth()) { mode = m } }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("Compás", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(14.dp))
+                SectionLabel("Compás")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(4 to 4, 3 to 4, 2 to 4, 6 to 8).forEach { t ->
-                        FilterChip(selected = time == t, onClick = { time = t }, label = { Text("${t.first}/${t.second}") })
+                        FilterChip(selected = time == t, onClick = { time = t }, label = { Text("${t.first}/${t.second}") }, shape = CircleShape)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = bpmText, onValueChange = { bpmText = it.filter(Char::isDigit).take(3) },
-                    label = { Text("Tempo (BPM) — vacío = detectar") }, singleLine = true,
+                    label = { Text("Tempo (BPM) — vacío = detectar") }, singleLine = true, shape = MaterialTheme.shapes.small,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = maxSecText, onValueChange = { maxSecText = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Analizar solo los primeros N segundos (opcional)") }, singleLine = true,
+                    label = { Text("Analizar solo los primeros N segundos (opcional)") }, singleLine = true, shape = MaterialTheme.shapes.small,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -174,7 +187,7 @@ private fun TranscribeOptionsDialog(fileName: String, onDismiss: () -> Unit, onS
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            Button(onClick = {
                 onStart(
                     TranscribeOptions(
                         mode = mode, bpm = bpmText.toIntOrNull()?.coerceIn(30, 260) ?: 0,

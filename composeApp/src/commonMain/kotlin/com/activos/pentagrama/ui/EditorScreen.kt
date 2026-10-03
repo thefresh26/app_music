@@ -100,6 +100,47 @@ import com.activos.pentagrama.symbols.G
 import com.activos.pentagrama.symbols.SymbolAction
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+import com.activos.pentagrama.riseIn
+import com.activos.pentagrama.serifFamily
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import com.activos.pentagrama.Paper
+import com.activos.pentagrama.pressScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,9 +199,11 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     val pdfMeasurer = rememberTextMeasurer()
     val musicFont = LocalMusicFont.current
     val density = LocalDensity.current
+    val serifFont = serifFamily()
+    val sansFont = MaterialTheme.typography.bodyMedium.fontFamily ?: FontFamily.SansSerif
     fun exportPdf() = scope.launch {
         state.message = "Preparando PDF…"
-        runCatching { withContext(Dispatchers.Default) { ScorePdf.export(state.score, pdfMeasurer, musicFont, density) } }
+        runCatching { withContext(Dispatchers.Default) { ScorePdf.export(state.score, pdfMeasurer, musicFont, density, serifFont, sansFont) } }
             .onSuccess { saver.save(fileNameOf(state.score, "pdf"), "application/pdf", it) }
             .onFailure { state.message = "No se pudo crear el PDF: ${it.message}" }
     }
@@ -176,10 +219,10 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
             TopAppBar(
                 title = {
                     Column(Modifier.padding(end = 4.dp)) {
-                        Text(state.score.title + if (state.dirty) " •" else "", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(state.score.title + if (state.dirty) " •" else "", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge)
                         Text(
                             "${keyName(state.score.keyFifths)} · ${state.score.timeNum}/${state.score.timeDen} · ${state.score.measures.size} compases",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 },
@@ -189,9 +232,6 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { if (playJob != null) stopPlayback() else play() }) {
-                        if (playJob != null) Icon(Icons.Filled.Stop, "Detener") else Icon(Icons.Filled.PlayArrow, "Reproducir")
-                    }
                     IconButton(onClick = state::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Deshacer") }
                     IconButton(onClick = state::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Rehacer") }
                     IconButton(onClick = { save() }) { Icon(Icons.Filled.Save, "Guardar") }
@@ -216,9 +256,13 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                             })
                         }
                     }
+                    PlayButton(playing = playJob != null) { if (playJob != null) stopPlayback() else play() }
+                    Spacer(Modifier.width(8.dp))
                 },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(pad)) {
@@ -231,16 +275,27 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                         HintBar(state)
                         ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
                     }
-                    VerticalDivider()
-                    SymbolPalette(state.tool.id, state::choose, Modifier.width(360.dp).fillMaxHeight())
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(topStart = 22.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.width(380.dp).fillMaxHeight(),
+                    ) { SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxSize().padding(top = 8.dp)) }
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
                     ScoreView(state, Modifier.weight(1f).fillMaxWidth(), follow = playJob != null)
-                    HorizontalDivider()
                     EditToolbar(state)
                     HintBar(state)
-                    SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxWidth().height(paletteHeight))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth().height(paletteHeight).padding(top = 6.dp),
+                    ) {
+                        Column {
+                            Box(Modifier.padding(top = 8.dp).size(36.dp, 4.dp).background(MaterialTheme.colorScheme.outline, CircleShape).align(Alignment.CenterHorizontally))
+                            SymbolPalette(state.tool.id, state::choose, Modifier.fillMaxSize())
+                        }
+                    }
                 }
             }
         }
@@ -253,7 +308,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
         onDismissRequest = { confirmExit = false },
         title = { Text("Cambios sin guardar") },
         text = { Text("¿Quieres guardar antes de salir?") },
-        confirmButton = { TextButton(onClick = { save(); confirmExit = false; onBack() }) { Text("Guardar y salir") } },
+        confirmButton = { Button(onClick = { save(); confirmExit = false; onBack() }) { Text("Guardar y salir") } },
         dismissButton = { TextButton(onClick = { confirmExit = false; onBack() }) { Text("Salir sin guardar") } },
     )
 }
@@ -266,13 +321,14 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
     val colors = ScoreColors(
-        ink = Color(0xFF111111), staff = Color(0xFF333333),
+        ink = Color(0xFF1E1B16), staff = Color(0xFF3A352D),
         selection = cs.primary.copy(alpha = 0.18f), measureSelection = cs.primary.copy(alpha = 0.07f),
-        overfull = Color(0x22E53935), section = Color(0xFFE9F76B), sectionText = Color(0xFF1B1B1B),
-        chord = Color(0xFF111111), paper = Color(0xFFFFFFFF), muted = Color(0xFF666666),
+        overfull = Color(0x26C2402F), section = Paper.Highlighter, sectionText = Color(0xFF1E1B16),
+        chord = Color(0xFF1E1B16), paper = Color(0xFFFFFEFB), muted = Color(0xFF6A6257),
         guide = cs.primary.copy(alpha = 0.22f), accent = cs.primary,
+        serif = serifFamily(), sans = MaterialTheme.typography.bodyMedium.fontFamily ?: FontFamily.SansSerif,
     )
-    BoxWithConstraints(modifier.background(Color(0xFFE9EAEE))) {
+    BoxWithConstraints(modifier.background(cs.background).padding(horizontal = 10.dp)) {
         val widthPx = with(density) { maxWidth.toPx() }
         val baseSpace = with(density) { (if (maxWidth > 700.dp) 8.5f else 6.5f).dp.toPx() }
         val s = baseSpace * state.zoom
@@ -289,7 +345,7 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
                 scroll.animateScrollTo((sys.top - viewportPx * 0.15f).toInt().coerceAtLeast(0))
             }
         }
-        Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        Box(Modifier.fillMaxSize().shadow(10.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFFEFB)).verticalScroll(scroll)) {
             ScoreCanvas(
                 score = state.score, layout = layout, musicFont = LocalMusicFont.current, colors = colors,
                 selection = state.selection, onTap = state::tap,
@@ -311,26 +367,38 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
 private fun EditToolbar(state: EditorState) {
     val sel = state.selection
     val hasEvent = sel?.event != null
-    Surface(tonalElevation = 2.dp) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            AssistChip(onClick = {}, label = {
-                Text("Herramienta: " + state.tool.nameEs, maxLines = 1, fontWeight = FontWeight.SemiBold)
-            })
-            FilterChip(state.chordMode, { state.chordMode = !state.chordMode }, label = { Text("Modo acorde") })
-            FilterChip(state.soundOn, { state.soundOn = !state.soundOn }, label = { Text(if (state.soundOn) "Sonido: sí" else "Sonido: no") })
-            IconButton(onClick = { state.moveSelected(1) }, enabled = hasEvent) { Icon(Icons.Filled.ArrowUpward, "Subir nota") }
-            IconButton(onClick = { state.moveSelected(-1) }, enabled = hasEvent) { Icon(Icons.Filled.ArrowDownward, "Bajar nota") }
-            IconButton(onClick = { state.deleteSelected() }, enabled = sel != null) { Icon(Icons.Filled.Delete, "Borrar selección") }
-            TextButton(onClick = { state.selectNext(-1) }) { Text("◀") }
-            TextButton(onClick = { state.selectNext(1) }) { Text("▶") }
-            TextButton(onClick = { state.addMeasure() }) { Icon(Icons.Filled.Add, null); Text("Compás") }
-            TextButton(onClick = { state.removeMeasure() }) { Icon(Icons.Filled.Remove, null); Text("Compás") }
-            IconButton(onClick = { state.zoom = (state.zoom - 0.15f).coerceAtLeast(0.5f) }) { Icon(Icons.Filled.ZoomOut, "Alejar") }
-            IconButton(onClick = { state.zoom = (state.zoom + 0.15f).coerceAtMost(2.5f) }) { Icon(Icons.Filled.ZoomIn, "Acercar") }
+            ToolPill(state.tool.nameEs)
+            FilterChip(state.chordMode, { state.chordMode = !state.chordMode }, label = { Text("Modo acorde") }, shape = CircleShape)
+            FilterChip(
+                state.soundOn, { state.soundOn = !state.soundOn }, shape = CircleShape,
+                label = { Text(if (state.soundOn) "Sonido: sí" else "Sonido: no") },
+                leadingIcon = { Icon(if (state.soundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, null, Modifier.size(18.dp)) },
+            )
+            Spacer(Modifier.width(4.dp))
+            ToolGroup {
+                GroupIcon(Icons.Filled.ArrowUpward, "Subir nota", hasEvent) { state.moveSelected(1) }
+                GroupIcon(Icons.Filled.ArrowDownward, "Bajar nota", hasEvent) { state.moveSelected(-1) }
+                GroupIcon(Icons.Outlined.Delete, "Borrar selección", sel != null, tint = MaterialTheme.colorScheme.primary) { state.deleteSelected() }
+            }
+            ToolGroup {
+                GroupIcon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Nota anterior") { state.selectNext(-1) }
+                GroupIcon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Nota siguiente") { state.selectNext(1) }
+            }
+            ToolGroup {
+                TextButton(onClick = { state.addMeasure() }) { Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Text("Compás") }
+                TextButton(onClick = { state.removeMeasure() }) { Icon(Icons.Filled.Remove, null, Modifier.size(18.dp)); Text("Compás") }
+            }
+            ToolGroup {
+                GroupIcon(Icons.Filled.ZoomOut, "Alejar") { state.zoom = (state.zoom - 0.15f).coerceAtLeast(0.5f) }
+                Text("${(state.zoom * 100).toInt()} %", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(44.dp), textAlign = TextAlign.Center)
+                GroupIcon(Icons.Filled.ZoomIn, "Acercar") { state.zoom = (state.zoom + 0.15f).coerceAtMost(2.5f) }
+            }
         }
     }
 }
@@ -359,24 +427,26 @@ private fun TextEntryDialog(action: SymbolAction, initial: String, onDismiss: ()
             Column {
                 OutlinedTextField(
                     text, { text = it }, placeholder = { Text(hint) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), shape = MaterialTheme.shapes.small,
+                    textStyle = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), modifier = Modifier.fillMaxWidth(),
                 )
                 if (suggestions.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        suggestions.forEach { sgg -> AssistChip(onClick = { text = sgg }, label = { Text(sgg) }) }
+                        suggestions.forEach { sgg -> AssistChip(onClick = { text = sgg }, label = { Text(sgg, style = if (action == SymbolAction.ChordSymbol) MaterialTheme.typography.titleMedium.copy(fontFamily = serifFamily(), fontWeight = FontWeight.Bold) else MaterialTheme.typography.labelLarge) }, shape = CircleShape) }
                     }
                 }
                 if (action == SymbolAction.ChordSymbol) {
                     Spacer(Modifier.height(4.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        qualities.forEach { q -> AssistChip(onClick = { text += q }, label = { Text("+$q") }) }
+                        qualities.forEach { q -> AssistChip(onClick = { text += q }, label = { Text("+$q") }, shape = CircleShape, colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer, labelColor = MaterialTheme.colorScheme.onPrimaryContainer), border = null) }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
                 Text("Déjalo vacío para quitarlo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Aceptar") } },
+        confirmButton = { Button(onClick = { onConfirm(text) }) { Text("Aceptar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }
@@ -395,29 +465,29 @@ private fun PropertiesDialog(score: Score, onDismiss: () -> Unit, onSave: (Score
         title = { Text("Propiedades") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(title, { title = it }, label = { Text("Título") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(subtitle, { subtitle = it }, label = { Text("Subtítulo / indicación") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(composer, { composer = it }, label = { Text("Autor / arreglista") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(title, { title = it }, label = { Text("Título") }, singleLine = true, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
+                OutlinedTextField(subtitle, { subtitle = it }, label = { Text("Subtítulo / indicación") }, singleLine = true, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
+                OutlinedTextField(composer, { composer = it }, label = { Text("Autor / arreglista") }, singleLine = true, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
                 OutlinedTextField(
                     tempo, { tempo = it.filter(Char::isDigit).take(3) }, label = { Text("Tempo (♩ por minuto)") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
-                Text("Compases por línea", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(14.dp))
+                SectionLabel("Compases por línea")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(0 to "Auto", 2 to "2", 3 to "3", 4 to "4", 5 to "5", 6 to "6").forEach { (v, l) ->
                         FilterChip(mpl == v, { mpl = v }, label = { Text(l) })
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("Clave", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(14.dp))
+                SectionLabel("Clave")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Clef.entries.forEach { c -> FilterChip(clef == c, { clef = c }, label = { Text(c.es) }) }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            Button(onClick = {
                 onSave(score.copy(title = title, subtitle = subtitle, composer = composer, tempoBpm = tempo.toIntOrNull() ?: score.tempoBpm, measuresPerLine = mpl, clef = clef))
             }) { Text("Aplicar") }
         },
@@ -456,10 +526,12 @@ fun hintFor(state: EditorState): String {
 
 @Composable
 private fun HintBar(state: EditorState) {
-    Surface(color = MaterialTheme.colorScheme.primaryContainer) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Info, null, Modifier.padding(end = 8.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            Text(hintFor(state), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 3)
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).animateContentSize(tween(240, easing = Paper.Ease)), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Lightbulb, null, Modifier.padding(end = 8.dp).size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            AnimatedContent(hintFor(state), transitionSpec = { fadeIn(tween(220, 60)) togetherWith fadeOut(tween(120)) }) { h ->
+                Text(h, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 3)
+            }
         }
     }
 }
@@ -482,12 +554,77 @@ fun HelpDialog(onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 HELP_STEPS.forEachIndexed { i, (t, d) ->
-                    Text("${i + 1}. $t", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    Text(d, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 10.dp))
+                    Row(Modifier.padding(bottom = 14.dp).riseIn(i)) {
+                        Box(
+                            Modifier.size(30.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("${i + 1}", style = MaterialTheme.typography.titleMedium.copy(fontFamily = serifFamily(), fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                        }
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(t, style = MaterialTheme.typography.titleSmall)
+                            Text(d, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Entendido") } },
+        confirmButton = { Button(onClick = onDismiss) { Text("Entendido") } },
     )
 }
 
+
+/** Herramienta activa: píldora de tinta; el nombre cambia con un pequeño deslizamiento vertical. */
+@Composable
+private fun ToolPill(name: String) {
+    val cs = MaterialTheme.colorScheme
+    Surface(color = cs.secondary, contentColor = cs.onSecondary, shape = CircleShape, modifier = Modifier.padding(end = 4.dp)) {
+        AnimatedContent(
+            name,
+            transitionSpec = {
+                (slideInVertically(tween(260, easing = Paper.Ease)) { it / 2 } + fadeIn(tween(200)))
+                    .togetherWith(slideOutVertically(tween(200)) { -it / 2 } + fadeOut(tween(120)))
+                    .using(SizeTransform(clip = false))
+            },
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        ) { n -> Text(n, maxLines = 1, style = MaterialTheme.typography.labelLarge) }
+    }
+}
+
+/** Botón de reproducir: círculo bermellón que respira suavemente mientras suena. */
+@Composable
+private fun PlayButton(playing: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val pulse = rememberInfiniteTransition()
+    val ring by pulse.animateFloat(1f, 1.18f, infiniteRepeatable(tween(700, easing = Paper.Ease), RepeatMode.Reverse))
+    val src = remember { MutableInteractionSource() }
+    Box(contentAlignment = Alignment.Center) {
+        if (playing) Box(Modifier.size(44.dp).graphicsLayer { scaleX = ring; scaleY = ring }.background(cs.primary.copy(alpha = 0.22f), CircleShape))
+        Surface(
+            onClick = onClick, shape = CircleShape, color = cs.primary, contentColor = cs.onPrimary, shadowElevation = 4.dp,
+            interactionSource = src, modifier = Modifier.size(44.dp).pressScale(src),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Crossfade(playing, animationSpec = tween(180)) { p ->
+                    if (p) Icon(Icons.Filled.Stop, "Detener") else Icon(Icons.Filled.PlayArrow, "Reproducir")
+                }
+            }
+        }
+    }
+}
+
+/** Grupo de botones en una cápsula con borde, como en la maqueta. */
+@Composable
+private fun ToolGroup(content: @Composable RowScope.() -> Unit) {
+    Surface(
+        shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) { Row(Modifier.height(44.dp).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, content = content) }
+}
+
+@Composable
+private fun GroupIcon(icon: ImageVector, label: String, enabled: Boolean = true, tint: Color = LocalContentColor.current, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(44.dp)) {
+        Icon(icon, label, Modifier.size(20.dp), tint = if (enabled) tint else tint.copy(alpha = 0.38f))
+    }
+}

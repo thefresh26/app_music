@@ -64,6 +64,9 @@ data class ScoreColors(
     val accent: Color = Color.Transparent,
     /** Faint lines that show the free beats ("casillas") where a tap places a note. Transparent = off (print). */
     val guide: Color = Color.Transparent,
+    /** Letras de títulos y cifrados (Fraunces en la app) y de rótulos (DM Sans). */
+    val serif: FontFamily = FontFamily.Serif,
+    val sans: FontFamily = FontFamily.SansSerif,
 )
 
 @Composable
@@ -146,7 +149,7 @@ internal class ScorePainter(
             fontSize = with(density) { (sizeSpaces * s).toSp() },
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            fontFamily = if (serif) FontFamily.Serif else FontFamily.SansSerif,
+            fontFamily = if (serif) c.serif else c.sans,
         )
         val r = measurer.measure(str, style)
         val w = r.size.width.toFloat()
@@ -158,7 +161,7 @@ internal class ScorePainter(
     fun textWidth(str: String, sizeSpaces: Float, bold: Boolean = false): Float {
         val style = TextStyle(
             fontSize = with(density) { (sizeSpaces * s).toSp() },
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, fontFamily = FontFamily.Serif,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, fontFamily = c.serif,
         )
         return measurer.measure(str, style).size.width.toFloat()
     }
