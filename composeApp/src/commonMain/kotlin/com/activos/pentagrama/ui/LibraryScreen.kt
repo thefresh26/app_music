@@ -93,7 +93,7 @@ import com.activos.pentagrama.model.keyName
 import com.activos.pentagrama.platform.ScoreStorage
 import com.activos.pentagrama.platform.StoredScore
 import com.activos.pentagrama.platform.currentTimeMillis
-import com.activos.pentagrama.platform.rememberTextFileOpener
+import com.activos.pentagrama.platform.rememberFileOpener
 
 fun newScoreId() = "s" + currentTimeMillis()
 
@@ -116,11 +116,14 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
         refresh++
         onOpen(id, r.score)
     }
-    val openFile = rememberTextFileOpener { _, text ->
-        runCatching { ScoreJson.decode(text) }
-            .onSuccess { s -> val id = newScoreId(); ScoreStorage.save(id, ScoreJson.encode(s)); refresh++; onOpen(id, s) }
-            .onFailure { info = "El archivo no es una partitura válida" }
-    }
+    val openFile = rememberFileOpener(
+        onScore = { _, text ->
+            runCatching { ScoreJson.decode(text) }
+                .onSuccess { s -> val id = newScoreId(); ScoreStorage.save(id, ScoreJson.encode(s)); refresh++; onOpen(id, s) }
+                .onFailure { info = "El archivo no es una partitura válida" }
+        },
+        onAudio = { transcribe(it) }, // a song: build the whole score from it
+    )
 
     val cs = MaterialTheme.colorScheme
     Scaffold(
@@ -148,8 +151,8 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
                     }
                     Spacer(Modifier.height(if (wide) 28.dp else 20.dp))
                     val newScore = @Composable { m: Modifier -> HeroCard(m.riseIn(1)) { showNew = true } }
-                    val mp3 = @Composable { m: Modifier -> ActionCard(Icons.Filled.GraphicEq, "Desde MP3", "Llena el pentagrama solo", m.riseIn(2)) { transcribe() } }
-                    val open = @Composable { m: Modifier -> ActionCard(Icons.Filled.FolderOpen, "Abrir archivo", ".pentagrama / .json", m.riseIn(3)) { openFile() } }
+                    val mp3 = @Composable { m: Modifier -> ActionCard(Icons.Filled.GraphicEq, "Desde canción", "MP3 → pentagrama completo", m.riseIn(2)) { transcribe(null) } }
+                    val open = @Composable { m: Modifier -> ActionCard(Icons.Filled.FolderOpen, "Abrir archivo", "Canción o partitura", m.riseIn(3)) { openFile() } }
                     val demo = @Composable { m: Modifier ->
                         ActionCard(Icons.Filled.LibraryMusic, "Ver ejemplo", "Cifrado \"No lo hay\"", m.riseIn(4)) {
                             val s = Templates.demoChart(); val id = newScoreId()

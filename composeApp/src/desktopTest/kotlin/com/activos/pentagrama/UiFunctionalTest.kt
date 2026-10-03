@@ -54,7 +54,8 @@ class UiFunctionalTest {
         // 1. Pantalla de inicio
         waitForText("Mis partituras")
         onNodeWithText("Nueva partitura").assertExistsCompat()
-        onNodeWithText("Desde MP3").assertExistsCompat()
+        onNodeWithText("Desde canción").assertExistsCompat()
+        onNodeWithText("Canción o partitura").assertExistsCompat()
         snap("01_inicio")
 
         // 2. Abrir el ejemplo de cifrado

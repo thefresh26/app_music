@@ -42,9 +42,13 @@ fun interface FileSaver {
 @Composable
 expect fun rememberFileSaver(onResult: (String) -> Unit): FileSaver
 
-/** Opens a text file (.pentagrama / .json) chosen by the user. */
+/** Audio file extensions the app tries to turn into a score. */
+val AUDIO_EXTENSIONS = setOf("mp3", "wav", "m4a", "aac", "ogg", "oga", "opus", "flac", "aiff", "aif", "au", "wma", "3gp", "amr", "webm")
+fun isAudioFileName(name: String) = name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS
+
+/** Opens a file chosen by the user: a song goes to [onAudio] (to build the score), a score (.pentagrama / .json) to [onScore]. */
 @Composable
-expect fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit): () -> Unit
+expect fun rememberFileOpener(onScore: (name: String, text: String) -> Unit, onAudio: (AudioSource) -> Unit): () -> Unit
 
 /** Plays mono 16-bit PCM (one sound at a time). */
 expect object AudioPlayer {

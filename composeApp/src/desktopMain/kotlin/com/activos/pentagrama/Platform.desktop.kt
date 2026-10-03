@@ -166,9 +166,7 @@ actual fun rememberAudioPicker(onPicked: (AudioSource) -> Unit): () -> Unit {
     val cb by rememberUpdatedState(onPicked)
     return remember<() -> Unit> {
         {
-            chooseFile("Selecciona una canción (mp3, wav)", save = false) {
-                it.endsWith(".mp3") || it.endsWith(".wav") || it.endsWith(".aiff") || it.endsWith(".aif") || it.endsWith(".au")
-            }?.let { cb(FileAudioSource(it)) }
+            chooseFile("Selecciona una canción (mp3, wav)", save = false, filter = ::isDesktopAudio)?.let { cb(FileAudioSource(it)) }
         }
     }
 }
@@ -187,13 +185,20 @@ actual fun rememberFileSaver(onResult: (String) -> Unit): FileSaver {
 }
 
 @Composable
-actual fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit): () -> Unit {
-    val cb by rememberUpdatedState(onOpened)
+actual fun rememberFileOpener(onScore: (name: String, text: String) -> Unit, onAudio: (AudioSource) -> Unit): () -> Unit {
+    val score by rememberUpdatedState(onScore)
+    val audio by rememberUpdatedState(onAudio)
     return remember<() -> Unit> {
         {
-            chooseFile("Abrir partitura", save = false) { it.endsWith(".pentagrama") || it.endsWith(".json") }
-                ?.takeIf { it.length() <= MAX_SCORE_FILE_BYTES }
-                ?.let { f -> runCatching { f.readText() }.getOrNull()?.let { cb(f.name, it) } }
+            val f = chooseFile("Abrir canción (mp3, wav) o partitura", save = false) { isDesktopAudio(it) || it.endsWith(".pentagrama") || it.endsWith(".json") }
+            when {
+                f == null -> {}
+                isAudioFileName(f.name) -> audio(FileAudioSource(f))
+                f.length() <= MAX_SCORE_FILE_BYTES -> runCatching { f.readText() }.getOrNull()?.let { score(f.name, it) }
+            }
         }
     }
 }
+
+/** Formats the desktop decoders (JLayer + Java Sound) can read. */
+private fun isDesktopAudio(name: String) = name.substringAfterLast('.', "") in setOf("mp3", "wav", "aiff", "aif", "au")

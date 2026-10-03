@@ -91,6 +91,16 @@ class PerformanceTest {
     }
 
     @Test
+    fun todosLosSonidosDeUnaCancionDe3Minutos() {
+        val audio = song(180)
+        Transcriber.transcribe(song(10), TranscribeOptions(mode = TranscribeMode.ALL)) // calentamiento
+        val (r, ms) = timed { Transcriber.transcribe(audio, TranscribeOptions(mode = TranscribeMode.ALL)) }
+        report("Pentagrama completo (todos los sonidos) de canción de 3 min", "$ms ms (${"%.0f".format(180_000.0 / ms)}× tiempo real, ${r.notes} notas)", "< 30 000 ms")
+        assertTrue(ms < 30_000, "tardó $ms ms")
+        assertTrue(r.notes > 100)
+    }
+
+    @Test
     fun memoriaDelAudioDecodificado() {
         val audio = song(60)
         val mb = audio.samples.size * 4 / 1_048_576.0

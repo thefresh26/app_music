@@ -245,11 +245,14 @@ actual fun rememberFileSaver(onResult: (String) -> Unit): FileSaver {
 }
 
 @Composable
-actual fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit): () -> Unit {
+actual fun rememberFileOpener(onScore: (name: String, text: String) -> Unit, onAudio: (AudioSource) -> Unit): () -> Unit {
     val context = LocalContext.current
-    val cb by rememberUpdatedState(onOpened)
+    val cb by rememberUpdatedState(onScore)
+    val audio by rememberUpdatedState(onAudio)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
+        if (uri != null && (context.contentResolver.getType(uri)?.startsWith("audio/") == true || isAudioFileName(displayName(context, uri)))) {
+            audio(UriAudioSource(context, uri))
+        } else if (uri != null) {
             val text = runCatching {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     val bytes = input.readNBytesCompat(MAX_SCORE_FILE_BYTES + 1)
@@ -260,5 +263,5 @@ actual fun rememberTextFileOpener(onOpened: (name: String, text: String) -> Unit
             if (text != null) cb(displayName(context, uri), text)
         }
     }
-    return { launcher.launch(arrayOf("application/json", "application/octet-stream", "text/plain", "*/*")) }
+    return { launcher.launch(arrayOf("audio/*", "application/json", "application/octet-stream", "text/plain", "*/*")) }
 }

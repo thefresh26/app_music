@@ -20,6 +20,7 @@ import com.activos.pentagrama.model.Templates
 import com.activos.pentagrama.render.ScoreLayout
 import com.activos.pentagrama.symbols.SymbolCatalog
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.pow
@@ -201,5 +202,67 @@ class CoreTest {
         }
         assertTrue(Synth.preview(emptyList()).any { kotlin.math.abs(it.toInt()) > 1_000 })
         assertEquals(4, Synth.slashNotes(Score(measures = listOf(Measure(chords = listOf(com.activos.pentagrama.model.ChordMark(0, "G"))), slashes)), 1, 0).size)
+    }
+
+    /** Acordes sostenidos (tipo órgano) + melodía punteada + ruido: como una canción con acompañamiento. */
+    private fun cancionConAcompanamiento(bpm: Int): Pair<List<List<Set<Int>>>, com.activos.pentagrama.audio.PcmAudio> {
+        val prog = listOf(listOf(48, 64, 67), listOf(53, 65, 69), listOf(55, 62, 71), listOf(48, 64, 67))
+        val mel = listOf(listOf(72, 74, 76, 77), listOf(77, 76, 74, 72), listOf(74, 79, 77, 74), listOf(72, 72, 79, 79))
+        val sr = 22050; val q = 60.0 / bpm
+        val x = FloatArray(((prog.size * 4 + 1) * q * sr).toInt())
+        var rnd = 1L
+        for (m in prog.indices) for (k in 0 until 4) {
+            val t = (m * 4 + k) * q
+            for (midi in prog[m] + mel[m][k]) {
+                val isMel = midi == mel[m][k]
+                val f = 440.0 * 2.0.pow((midi - 69) / 12.0)
+                val s0 = (t * sr).toInt()
+                for (i in 0 until (q * sr).toInt()) {
+                    val tt = i.toDouble() / sr
+                    val env = if (isMel) min(1.0, tt * 300) * exp(-tt * 3) * 0.5 else 0.12
+                    var v = 0.0
+                    for (h in 1..8) v += sin(2 * PI * f * (t + tt) * h) / h.toDouble().pow(if (isMel) 1.2 else 0.8)
+                    x[s0 + i] += (env * v).toFloat()
+                }
+            }
+        }
+        for (i in x.indices) { rnd = rnd * 6364136223846793005L + 1; x[i] += ((rnd ushr 40).toInt() / 16777216f - 0.5f) * 0.05f }
+        val truth = prog.indices.map { m -> List(16) { u -> (prog[m] + mel[m][u / 4]).toSet() } }
+        return truth to com.activos.pentagrama.audio.PcmAudio(x, sr, "cancion.wav")
+    }
+
+    @Test
+    fun todosLosSonidosDeUnaCancion() {
+        for (bpm in listOf(80, 120)) {
+            val (truth, audio) = cancionConAcompanamiento(bpm)
+            val r = Transcriber.transcribe(audio, TranscribeOptions(mode = TranscribeMode.ALL))
+            assertTrue(abs(r.bpm - bpm) <= 2, "bpm=${r.bpm}")
+            // Cada semicorchea: qué notas suenan en la partitura vs. en la canción.
+            var tp = 0; var fp = 0; var fn = 0
+            for ((mi, m) in truth.withIndex()) {
+                val got = r.score.measures[mi].events.flatMap { e -> List(e.ticks / 24) { if (e.kind == EventKind.NOTE) e.pitches.map { it.midi }.toSet() else emptySet() } }
+                for (u in 0 until 16) { val g = got.getOrElse(u) { emptySet() }; tp += (m[u] intersect g).size; fp += (g - m[u]).size; fn += (m[u] - g).size }
+            }
+            val precision = tp.toDouble() / (tp + fp); val recall = tp.toDouble() / (tp + fn)
+            println("todos los sonidos a $bpm BPM: precisión=$precision cobertura=$recall")
+            assertTrue(precision > 0.85 && recall > 0.8, "precisión=$precision cobertura=$recall")
+            assertTrue(r.score.measures.all { it.usedTicks == r.score.measureTicks })
+        }
+    }
+
+    @Test
+    fun notaLigadaSuenaUnaSolaVez() {
+        // Un Do que dura 2 compases (ligado) no se vuelve a atacar al empezar el compás 2, aunque cambie la melodía encima.
+        fun render(tie: Boolean) = Synth.render(Score(tempoBpm = 120, measures = List(2) { mi ->
+            Measure(events = List(4) { k -> Event(EventKind.NOTE, NoteValue.QUARTER, listOf(Pitch.fromMidi(48), Pitch.fromMidi(72 + k)), tieToNext = tie && !(mi == 1 && k == 3)) })
+        }))
+        fun bassEnergyAt(sec: Double, r: com.activos.pentagrama.audio.Rendered): Double {
+            val a = (sec * r.sampleRate).toInt()
+            return (a until a + 1000).sumOf { kotlin.math.abs(r.pcm[it].toDouble()) }
+        }
+        // Mismo audio salvo el bajo: si está ligado, a los 2,05 s suena menos (no hay ataque nuevo).
+        assertTrue(bassEnergyAt(2.05, render(true)) < bassEnergyAt(2.05, render(false)))
+        // Y no se queda colgado: la ligadura solo une la misma nota en notas seguidas.
+        assertEquals(render(true).pcm.size, render(false).pcm.size)
     }
 }

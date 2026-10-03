@@ -60,11 +60,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Picks an audio file, asks for options, decodes and transcribes it off the main thread.
- * Returns a function that starts the flow.
+ * Asks for options, decodes and transcribes an audio file off the main thread.
+ * Returns a function that starts the flow: with a file already chosen, or null to pick one.
  */
 @Composable
-fun rememberTranscription(onDone: (TranscriptionResult) -> Unit): () -> Unit {
+fun rememberTranscription(onDone: (TranscriptionResult) -> Unit): (AudioSource?) -> Unit {
     var source by remember { mutableStateOf<AudioSource?>(null) }
     var running by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -137,12 +137,12 @@ fun rememberTranscription(onDone: (TranscriptionResult) -> Unit): () -> Unit {
             confirmButton = { Button(onClick = { errorMsg = null }) { Text("Aceptar") } },
         )
     }
-    return picker
+    return { s -> source = s; if (s == null) picker() }
 }
 
 @Composable
 private fun TranscribeOptionsDialog(fileName: String, onDismiss: () -> Unit, onStart: (TranscribeOptions) -> Unit) {
-    var mode by remember { mutableStateOf(TranscribeMode.MELODY_AND_CHORDS) }
+    var mode by remember { mutableStateOf(TranscribeMode.ALL) }
     var bpmText by remember { mutableStateOf("") }
     var time by remember { mutableStateOf(4 to 4) }
     var maxSecText by remember { mutableStateOf("") }
@@ -179,8 +179,9 @@ private fun TranscribeOptionsDialog(fileName: String, onDismiss: () -> Unit, onS
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Consejo: funciona mejor con una melodía clara (voz o instrumento solista). " +
-                        "Los acordes se estiman de la mezcla completa. Revisa y corrige el resultado en el editor.",
+                    "\"Todos los sonidos\" escribe a la vez la melodía, el acompañamiento y el bajo que se oyen en la canción. " +
+                        "Funciona mejor con pocas pistas (piano, guitarra, voz); en mezclas muy cargadas pueden faltar o sobrar notas. " +
+                        "Revisa y corrige el resultado en el editor.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

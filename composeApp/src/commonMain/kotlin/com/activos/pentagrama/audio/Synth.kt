@@ -12,10 +12,13 @@ import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.math.tanh
 
 /** Something to highlight while playing: measure, event index (null = whole measure) and start time in seconds. */
 data class Cue(val measure: Int, val event: Int?, val sec: Double)
+
+private class Played(val st: Double, val du: Double, val e: com.activos.pentagrama.model.Event)
 
 /** Rendered audio plus cues to follow the playback on screen, note by note. */
 class Rendered(val pcm: ShortArray, val sampleRate: Int, val measureStarts: List<Pair<Int, Double>>, val cues: List<Cue>)
@@ -150,7 +153,7 @@ object Synth {
         var t0 = 0.0
         var lastContent: Measure? = null
         var currentChord: String? = null
-        val tied = mutableSetOf<Int>() // midi notes still sounding from a tie
+        val seq = mutableListOf<Played>()
         for (mi in order) {
             if (t0 * sr >= buf.size) break
             starts += mi to t0
@@ -162,7 +165,8 @@ object Synth {
             val chords = m.chords.sortedBy { it.tick }
             fun chordAt(tick: Int): String? = chords.lastOrNull { it.tick <= tick }?.text ?: currentChord
             val hasSlashes = m.events.any { it.kind == EventKind.SLASH }
-            if (!hasSlashes) {
+            // The pad is skipped when the measure already spells its harmony (slashes, or notes played together).
+            if (!hasSlashes && m.events.none { it.kind == EventKind.NOTE && it.pitches.size >= 2 }) {
                 val spans = (if (chords.isEmpty() || chords.first().tick > 0) listOfNotNull(currentChord?.let { 0 to it }) else emptyList()) +
                     chords.map { it.tick to it.text }
                 spans.forEachIndexed { k, (tick, text) ->
@@ -180,12 +184,7 @@ object Synth {
                 if (!written.repeatMeasure) cues += Cue(mi, ei, st)
                 val du = e.ticks * secPerTick
                 when (e.kind) {
-                    EventKind.NOTE -> e.pitches.forEach { p ->
-                        if (p.midi in tied) { if (!e.tieToNext) tied -= p.midi; return@forEach }
-                        var total = du
-                        if (e.tieToNext) { tied += p.midi; total += du } // ponytail: a tie extends one more value, enough for most ties
-                        tone(buf, st, total, p.midi, 0.22)
-                    }
+                    EventKind.NOTE -> seq += Played(st, du, e) // sounded below, once ties are known
                     EventKind.SLASH -> {
                         val notes = chordAt(tick)?.let { chordNotes(it) }
                         if (notes == null) click(buf, st, 0.5) // no chord yet: the rhythm is still heard
@@ -200,6 +199,20 @@ object Synth {
             }
             chords.lastOrNull()?.let { currentChord = it.text }
             t0 += measureSec
+        }
+
+        // Notes: a tie joins the same pitch in the next note, across measures, so held notes sound as one.
+        fun Played?.has(midi: Int) = this != null && e.kind == EventKind.NOTE && e.pitches.any { it.midi == midi }
+        for ((i, n) in seq.withIndex()) {
+            val prev = seq.getOrNull(i - 1)?.takeIf { it.e.tieToNext && it.st + it.du >= n.st - 1e-6 }
+            val gain = 0.22 / sqrt(n.e.pitches.size.toDouble())
+            for (p in n.e.pitches) {
+                if (prev.has(p.midi)) continue
+                var total = n.du
+                var j = i
+                while (seq[j].e.tieToNext && seq.getOrNull(j + 1).has(p.midi) && seq[j + 1].st <= seq[j].st + seq[j].du + 1e-6) { j++; total += seq[j].du }
+                tone(buf, n.st, total, p.midi, gain)
+            }
         }
 
         val end = min(buf.size, ((t0 + 0.5) * sr).toInt())

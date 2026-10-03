@@ -49,6 +49,13 @@ class AudioPipelineTest {
         val second = r.score.measures[1].events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi }
         assertEquals(listOf(74, 71), second)
         assertTrue(r.score.measures.all { it.usedTicks <= r.score.measureTicks }, "ningún compás desbordado")
+
+        // "Todos los sonidos" (lo que usa "Abrir archivo" con una canción) con el mismo MP3.
+        val all = Transcriber.transcribe(pcm, TranscribeOptions(mode = TranscribeMode.ALL))
+        all.score.measures.take(2).forEachIndexed { i, m -> println("  todos, compás ${i + 1}: " + m.events.joinToString(" ") { e -> e.pitches.joinToString(",") { it.name() } + ":" + e.value.name }) }
+        assertEquals(expectedFirstMeasure, all.score.measures[0].events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi })
+        assertEquals(listOf(74, 71), all.score.measures[1].events.filter { it.kind == EventKind.NOTE }.map { it.pitches.first().midi })
+        assertTrue(all.score.measures.all { it.usedTicks == all.score.measureTicks }, "compases completos")
     }
 
     @Test

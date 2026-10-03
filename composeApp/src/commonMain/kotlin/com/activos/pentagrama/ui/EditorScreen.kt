@@ -240,7 +240,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más") }
                         DropdownMenu(menu, { menu = false }) {
                             DropdownMenuItem({ Text("Propiedades (título, tempo, compases por línea)") }, { menu = false; showProps = true })
-                            DropdownMenuItem({ Text("Llenar desde MP3 / audio…") }, { menu = false; transcribe() })
+                            DropdownMenuItem({ Text("Llenar desde MP3 / audio…") }, { menu = false; transcribe(null) })
                             DropdownMenuItem({ Text("Rellenar compases vacíos con barras rítmicas") }, {
                                 menu = false; state.updateScore { ScoreOps.fillSlashes(it) }
                             })
@@ -542,7 +542,7 @@ private val HELP_STEPS = listOf(
     "Corrige sin miedo" to "Con \"Seleccionar\" toca una nota: ↑ ↓ cambian su altura y 🗑 la borra. ↶ deshace y ↷ rehace cualquier cambio.",
     "Acordes y secciones" to "En la categoría \"Cifrado y texto\": acordes (Am, G7), secciones (Intro, Coro) y textos (x2). Repeticiones, casillas 1/2 y Coda están en \"Barras\" y \"Navegación\".",
     "Escucha lo que escribiste" to "▶ toca la partitura y va marcando la nota que suena. Si seleccionas un compás primero, empieza desde ahí.",
-    "Desde una canción" to "⋮ → \"Llenar desde MP3\": la app saca la melodía, el ritmo y los acordes. Revísalo y corrígelo aquí.",
+    "Desde una canción" to "⋮ → \"Llenar desde MP3\": la app escribe todos los sonidos (melodía, acompañamiento y bajo), el ritmo y los acordes. Revísalo y corrígelo aquí.",
     "Guarda e imprime" to "💾 guarda en el dispositivo. ⋮ → \"Exportar PDF\" para imprimir o compartir; también MusicXML para MuseScore.",
 )
 

@@ -26,6 +26,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 enum class TranscribeMode(val es: String) {
+    ALL("Todos los sonidos (melodía, acompañamiento y bajo) + cifrado"),
     MELODY_AND_CHORDS("Melodía + cifrado"),
     MELODY("Solo melodía"),
     CHORDS("Solo cifrado (acordes con barras rítmicas)"),
@@ -91,7 +92,10 @@ object Transcriber {
         val chroma = chromagram(x)
 
         var notes = emptyList<RawNote>()
-        if (opts.mode != TranscribeMode.CHORDS) {
+        if (opts.mode == TranscribeMode.ALL) {
+            progress(0.35f, "Detectando todos los sonidos…")
+            notes = polyNotes(x, flux, opts.minNoteMs) { p -> progress(0.35f + 0.4f * p, "Detectando todos los sonidos…") }
+        } else if (opts.mode != TranscribeMode.CHORDS) {
             progress(0.35f, "Detectando la melodía (tono)…")
             val y = resample(x, SR, YIN_SR)
             val (pitch, rms) = yinTrack(y) { p -> progress(0.35f + 0.4f * p, "Detectando la melodía (tono)…") }
@@ -395,6 +399,119 @@ object Transcriber {
         return rms[f] >= 1.5f * before
     }
 
+    // ---------------------------------------------------------------- polyphonic (all sounds)
+
+    private const val POLY_N = 4096          // 256 ms window: ~4 Hz bins, enough down to E2
+    private const val POLY_HOP = 640         // 40 ms
+    private const val POLY_LO = 40           // E2
+    private const val POLY_HI = 88           // E6
+    private const val POLY_HARM = 6
+    private const val POLY_MAX = 5           // simultaneous notes per frame
+    private const val END_TRIM = 0.08
+
+    /**
+     * Several notes at once from the full mix: per frame, harmonic-sum salience over every semitone, pick the
+     * strongest note, remove its harmonics from the spectrum and repeat (iterative estimation, Klapuri style);
+     * then each pitch is tracked over time into notes, split when it is struck again.
+     * ponytail: no instrument separation or ML model; octave doublings and very dense mixes lose notes.
+     */
+    fun polyNotes(x: FloatArray, onset: FloatArray, minNoteMs: Int, progress: (Float) -> Unit = {}): List<RawNote> {
+        val fft = Fft(POLY_N)
+        val frames = max(0, (x.size - POLY_N) / POLY_HOP + 1)
+        val nc = POLY_HI - POLY_LO + 1
+        val lo = Array(nc) { IntArray(POLY_HARM) { -1 } }
+        val hi = Array(nc) { IntArray(POLY_HARM) { -1 } }
+        for (c in 0 until nc) for (h in 0 until POLY_HARM) {
+            val f = 440.0 * 2.0.pow((POLY_LO + c - 69) / 12.0) * (h + 1)
+            if (f > 5_000) continue
+            lo[c][h] = (f * 0.9715 * POLY_N / SR).roundToInt()
+            hi[c][h] = max(lo[c][h], (f * 1.0293 * POLY_N / SR).roundToInt())
+        }
+        val weight = FloatArray(POLY_HARM) { (1.0 / sqrt(it + 1.0)).toFloat() }
+        val re = FloatArray(POLY_N); val im = FloatArray(POLY_N); val mag = FloatArray(POLY_N / 2)
+        val sal = Array(frames) { FloatArray(nc) }
+        val firstPick = FloatArray(frames)
+        val peaks = FloatArray(POLY_HARM)
+
+        var maxRms = 0f
+        val rms = FloatArray(frames) { f ->
+            var e = 0f
+            val o = f * POLY_HOP + POLY_N / 4
+            for (j in o until min(x.size, o + POLY_N / 2)) e += x[j] * x[j]
+            sqrt(e / (POLY_N / 2)).also { maxRms = max(maxRms, it) }
+        }
+        for (f in 0 until frames) {
+            if (f % 200 == 0) progress(0.8f * f / max(1, frames))
+            if (rms[f] < maxRms * 0.03f) continue
+            fft.magnitudes(x, f * POLY_HOP, re, im, mag)
+            var first = 0f
+            for (pick in 0 until POLY_MAX) {
+                var best = -1; var bestS = 0f
+                for (c in 0 until nc) {
+                    var s = 0f; var top = 0f
+                    for (h in 0 until POLY_HARM) {
+                        val a = lo[c][h]
+                        if (a < 0) { peaks[h] = 0f; continue }
+                        var pk = 0f
+                        for (b in a..hi[c][h]) if (mag[b] > pk) pk = mag[b]
+                        peaks[h] = pk; top = max(top, pk); s += pk * weight[h]
+                    }
+                    // The fundamental itself must be present, otherwise it is a "ghost" an octave below.
+                    if (peaks[0] < 0.2f * top) continue
+                    if (s > bestS) { bestS = s; best = c }
+                }
+                if (best < 0 || (pick > 0 && bestS < 0.15f * first)) break
+                if (pick == 0) first = bestS
+                sal[f][best] = bestS
+                for (h in 0 until POLY_HARM) {
+                    val a = lo[best][h]; if (a < 0) continue
+                    val k = if (h == 0) 0f else 0.25f // keep part of shared partials for other notes
+                    for (b in max(0, a - 1)..min(mag.size - 1, hi[best][h] + 1)) mag[b] *= k
+                }
+            }
+            firstPick[f] = first
+        }
+
+        // Global threshold relative to the loud parts of the song.
+        val loud = firstPick.filter { it > 0f }.sorted()
+        if (loud.isEmpty()) return emptyList()
+        val thr = loud[(loud.size * 0.9).toInt().coerceAtMost(loud.size - 1)] * 0.05f
+        var onsetMax = 0f
+        for (v in onset) onsetMax = max(onsetMax, v)
+        fun onsetNear(f: Int): Boolean { // flux frames are 20 ms, poly frames 40 ms (window centered)
+            val center = (f * POLY_HOP + POLY_N / 2) / FLUX_HOP
+            for (k in center - 3..center + 1) if (k in onset.indices && onset[k] > onsetMax * 0.2f) return true
+            return false
+        }
+        val minFrames = max(2, (minNoteMs / 40.0).roundToInt() + 1)
+        val out = mutableListOf<RawNote>()
+        val frameSec = POLY_HOP.toDouble() / SR
+        val centerSec = POLY_N / 2.0 / SR
+        for (c in 0 until nc) {
+            val on = BooleanArray(frames) { sal[it][c] > thr }
+            for (f in 1 until frames - 1) if (!on[f] && on[f - 1] && on[f + 1]) on[f] = true // 1-frame gaps
+            var start = -1
+            fun close(end: Int) {
+                if (start >= 0 && end - start >= minFrames) {
+                    // The long window keeps "hearing" a note after it stops: pull the end back about a quarter window.
+                    val st = start * frameSec + centerSec - frameSec / 2
+                    out += RawNote(st, max(st + 0.06, end * frameSec + centerSec - frameSec / 2 - END_TRIM), POLY_LO + c)
+                }
+                start = -1
+            }
+            for (f in 0..frames) {
+                val active = f < frames && on[f]
+                if (!active) { close(f); continue }
+                if (start < 0) { start = f; continue }
+                // Same pitch struck again: salience jumps up together with an onset in the mix.
+                val before = min(sal[f - 1][c], sal[max(0, f - 2)][c])
+                if (f - start >= minFrames && sal[f][c] > 1.6f * before && onsetNear(f)) { close(f); start = f }
+            }
+        }
+        progress(1f)
+        return out.sortedBy { it.start }
+    }
+
     // ---------------------------------------------------------------- key & chords
 
     private val MAJOR_PROFILE = doubleArrayOf(6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
@@ -543,8 +660,38 @@ object Transcriber {
 
         val measures = MutableList(measureCount) { Measure() }
 
+        // ---- all sounds: every note at once, as chords on one staff
+        if (opts.mode == TranscribeMode.ALL) {
+            val pq = notes.map { n ->
+                val s = ((n.start - t0) / grid).roundToInt().coerceAtLeast(0)
+                Seg(s, max(1, ((n.end - t0) / grid).roundToInt() - s), n.midi)
+            }
+            for (mi in 0 until measureCount) {
+                val mStart = mi * measureUnits
+                val mEnd = mStart + measureUnits
+                val inside = pq.filter { it.start < mEnd && it.start + it.len > mStart }
+                val cuts = (inside.flatMap { listOf(it.start, it.start + it.len) }.filter { it in mStart..mEnd } + mStart + mEnd)
+                    .distinct().sorted()
+                val events = mutableListOf<Event>()
+                for (k in 0 until cuts.size - 1) {
+                    val a = cuts[k]; val b = cuts[k + 1]
+                    val active = inside.filter { it.start <= a && it.start + it.len >= b }
+                    val pitches = active.mapNotNull { it.midi }.distinct().sorted().map { Pitch.fromMidi(it, keyFifths) }
+                    val continues = active.any { it.start + it.len > b }
+                    val pieces = splitUnits(a - mStart, b - a)
+                    pieces.forEachIndexed { pi, u ->
+                        val (v, dots) = unitsToValue(u)
+                        // ponytail: a pitch that ends and is struck again exactly at b would show as tied.
+                        events += if (pitches.isEmpty()) Event(EventKind.REST, v, dots = dots)
+                        else Event(EventKind.NOTE, v, pitches, dots = dots, tieToNext = pi < pieces.lastIndex || continues)
+                    }
+                }
+                measures[mi] = measures[mi].copy(events = if (events.all { it.kind == EventKind.REST } && measureUnits == 16) listOf(Event(EventKind.REST, NoteValue.WHOLE)) else events)
+            }
+        }
+
         // ---- melody
-        if (opts.mode != TranscribeMode.CHORDS) {
+        if (opts.mode != TranscribeMode.CHORDS && opts.mode != TranscribeMode.ALL) {
             for (mi in 0 until measureCount) {
                 val mStart = mi * measureUnits
                 val mEnd = mStart + measureUnits
