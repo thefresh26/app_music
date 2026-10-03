@@ -24,8 +24,8 @@ object ScorePdf {
     const val PAGE_H = 2339
 
     val printColors = ScoreColors(
-        ink = Color(0xFF111111), staff = Color(0xFF2A2A2A), selection = Color.Transparent, measureSelection = Color.Transparent,
-        overfull = Color.Transparent, section = Color(0xFFF2DE7A), sectionText = Color.Black, chord = Color.Black,
+        ink = Color(0xFF1F2937), staff = Color(0xFF374151), selection = Color.Transparent, measureSelection = Color.Transparent,
+        overfull = Color.Transparent, section = Color(0xFFF1C40F), sectionText = Color.Black, chord = Color.Black,
         paper = Color.White, muted = Color(0xFF555555),
     )
 

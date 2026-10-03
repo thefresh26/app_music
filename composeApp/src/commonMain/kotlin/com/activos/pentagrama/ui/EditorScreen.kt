@@ -321,10 +321,10 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
     val density = LocalDensity.current
     val cs = MaterialTheme.colorScheme
     val colors = ScoreColors(
-        ink = Color(0xFF1E1B16), staff = Color(0xFF3A352D),
+        ink = Color(0xFF1F2937), staff = Color(0xFF374151),
         selection = cs.primary.copy(alpha = 0.18f), measureSelection = cs.primary.copy(alpha = 0.07f),
-        overfull = Color(0x26C2402F), section = Paper.Highlighter, sectionText = Color(0xFF1E1B16),
-        chord = Color(0xFF1E1B16), paper = Color(0xFFFFFEFB), muted = Color(0xFF6A6257),
+        overfull = Color(0x269F1239), section = Paper.Highlighter, sectionText = Color(0xFF1F2937),
+        chord = Color(0xFF1F2937), paper = Color(0xFFFFFFFF), muted = Color(0xFF5B6472),
         guide = cs.primary.copy(alpha = 0.22f), accent = cs.primary,
         serif = serifFamily(), sans = MaterialTheme.typography.bodyMedium.fontFamily ?: FontFamily.SansSerif,
     )
@@ -345,7 +345,7 @@ private fun ScoreView(state: EditorState, modifier: Modifier, follow: Boolean = 
                 scroll.animateScrollTo((sys.top - viewportPx * 0.15f).toInt().coerceAtLeast(0))
             }
         }
-        Box(Modifier.fillMaxSize().shadow(10.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFFEFB)).verticalScroll(scroll)) {
+        Box(Modifier.fillMaxSize().shadow(10.dp, RoundedCornerShape(6.dp)).clip(RoundedCornerShape(6.dp)).background(Color(0xFFFFFFFF)).verticalScroll(scroll)) {
             ScoreCanvas(
                 score = state.score, layout = layout, musicFont = LocalMusicFont.current, colors = colors,
                 selection = state.selection, onTap = state::tap,

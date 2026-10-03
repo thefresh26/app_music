@@ -37,40 +37,40 @@ import com.activos.pentagrama.generated.resources.fraunces_italic
 import com.activos.pentagrama.generated.resources.fraunces_semibold
 import org.jetbrains.compose.resources.Font
 
-/** "Cuaderno de música": papel cálido, tinta, bermellón de lápiz de corrección y resaltador amarillo. */
+/** Paleta: #F5F3FF lavanda (fondo) · #1F2937 pizarra (texto) · #9F1239 carmesí (acción) · #4C0519 vino (selección) · #F1C40F oro (resaltador). */
 object Paper {
-    val Highlighter = Color(0xFFF2DE7A)
+    val Highlighter = Color(0xFFF1C40F)
     /** Salida rápida, llegada suave: la curva de todas las animaciones. */
     val Ease = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 }
 
 val LightColors = lightColorScheme(
-    primary = Color(0xFFC2402F), onPrimary = Color(0xFFFFFCF6),
-    primaryContainer = Color(0xFFF5DDD5), onPrimaryContainer = Color(0xFF5A140C),
-    secondary = Color(0xFF1E1B16), onSecondary = Color(0xFFFFFCF6),
-    secondaryContainer = Color(0xFF1E1B16), onSecondaryContainer = Color(0xFFFFFCF6),
-    tertiary = Color(0xFF3E4756), tertiaryContainer = Color(0xFFECE5D6), onTertiaryContainer = Color(0xFF1E1B16),
-    background = Color(0xFFF4EEE2), onBackground = Color(0xFF1E1B16),
-    surface = Color(0xFFFFFCF6), onSurface = Color(0xFF1E1B16),
-    surfaceVariant = Color(0xFFF4EEE2), onSurfaceVariant = Color(0xFF6A6257),
-    surfaceContainerLowest = Color(0xFFFFFEFB), surfaceContainerLow = Color(0xFFFFFCF6),
-    surfaceContainer = Color(0xFFFAF5EC), surfaceContainerHigh = Color(0xFFF4EEE2), surfaceContainerHighest = Color(0xFFECE5D6),
-    outline = Color(0xFFC9BEA9), outlineVariant = Color(0xFFE3D9C6),
+    primary = Color(0xFF9F1239), onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFCE7EE), onPrimaryContainer = Color(0xFF4C0519),
+    secondary = Color(0xFF4C0519), onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFF4C0519), onSecondaryContainer = Color(0xFFFFFFFF),
+    tertiary = Color(0xFFF1C40F), tertiaryContainer = Color(0xFFECE9FA), onTertiaryContainer = Color(0xFF1F2937),
+    background = Color(0xFFF5F3FF), onBackground = Color(0xFF1F2937),
+    surface = Color(0xFFFFFFFF), onSurface = Color(0xFF1F2937),
+    surfaceVariant = Color(0xFFF5F3FF), onSurfaceVariant = Color(0xFF5B6472),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFF9F8FF), surfaceContainerHigh = Color(0xFFF5F3FF), surfaceContainerHighest = Color(0xFFECE9FA),
+    outline = Color(0xFFC7C2E0), outlineVariant = Color(0xFFE4E0F5),
     error = Color(0xFFB3261E), surfaceTint = Color.Transparent,
 )
 
 val DarkColors = darkColorScheme(
-    primary = Color(0xFFF08A72), onPrimary = Color(0xFF3A0D06),
-    primaryContainer = Color(0xFF5C2219), onPrimaryContainer = Color(0xFFFFDAD1),
-    secondary = Color(0xFFEEE7D9), onSecondary = Color(0xFF17150F),
-    secondaryContainer = Color(0xFFEEE7D9), onSecondaryContainer = Color(0xFF17150F),
-    tertiary = Color(0xFFB9C3D3), tertiaryContainer = Color(0xFF2C2922), onTertiaryContainer = Color(0xFFEEE7D9),
-    background = Color(0xFF17150F), onBackground = Color(0xFFEEE7D9),
-    surface = Color(0xFF221F19), onSurface = Color(0xFFEEE7D9),
-    surfaceVariant = Color(0xFF2C2922), onSurfaceVariant = Color(0xFFB5AC9C),
-    surfaceContainerLowest = Color(0xFF12100B), surfaceContainerLow = Color(0xFF1C1A14),
-    surfaceContainer = Color(0xFF221F19), surfaceContainerHigh = Color(0xFF2C2922), surfaceContainerHighest = Color(0xFF37332B),
-    outline = Color(0xFF5A5347), outlineVariant = Color(0xFF3A352D),
+    primary = Color(0xFFFB7185), onPrimary = Color(0xFF4C0519),
+    primaryContainer = Color(0xFF4C0519), onPrimaryContainer = Color(0xFFFCE7EE),
+    secondary = Color(0xFFF5F3FF), onSecondary = Color(0xFF1F2937),
+    secondaryContainer = Color(0xFFF5F3FF), onSecondaryContainer = Color(0xFF1F2937),
+    tertiary = Color(0xFFF1C40F), tertiaryContainer = Color(0xFF2F3B50), onTertiaryContainer = Color(0xFFF5F3FF),
+    background = Color(0xFF1F2937), onBackground = Color(0xFFF5F3FF),
+    surface = Color(0xFF273346), onSurface = Color(0xFFF5F3FF),
+    surfaceVariant = Color(0xFF2F3B50), onSurfaceVariant = Color(0xFFB8BDCB),
+    surfaceContainerLowest = Color(0xFF18202C), surfaceContainerLow = Color(0xFF232E3E),
+    surfaceContainer = Color(0xFF273346), surfaceContainerHigh = Color(0xFF2F3B50), surfaceContainerHighest = Color(0xFF3A475D),
+    outline = Color(0xFF556075), outlineVariant = Color(0xFF374151),
     surfaceTint = Color.Transparent,
 )
 
