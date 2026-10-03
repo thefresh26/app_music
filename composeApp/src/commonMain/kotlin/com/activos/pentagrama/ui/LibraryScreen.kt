@@ -404,7 +404,7 @@ fun formatDate(millis: Long): String {
 
 @Composable
 internal fun SectionLabel(text: String) =
-    Text(text.uppercase(), style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+    Text(text, style = Eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
 
 @Composable
 internal fun TemplateTile(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
