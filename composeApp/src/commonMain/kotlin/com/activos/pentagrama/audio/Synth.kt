@@ -79,7 +79,7 @@ object Synth {
 
     /**
      * Adds one additive tone into [buf] that lasts exactly its written value: quick attack, settles to a steady
-     * level that holds for the whole duration (a whole note sounds its 4 beats), then a short release.
+     * level that holds unchanged for the whole duration (a whole note sounds its 4 beats), then a short release.
      * Oscillator and envelope run as recurrences (no sin/exp per sample).
      */
     private fun tone(buf: FloatArray, startSec: Double, durSec: Double, midi: Int, gain: Double) {
@@ -90,12 +90,10 @@ object Synth {
         val w = 2 * PI * f / sr
         val cw = cos(w); val sw = sin(w)
         val toSustain = exp(-1.0 / (0.25 * sr))     // attack peak settles in ~0.25 s
-        val holdStep = exp(-1.0 / (12.0 * sr))      // almost flat while the note is held
         val releaseStep = exp(-1.0 / (RELEASE_SEC * sr))
         val release = (durSec * sr).toInt()
         var s = 0.0; var c = 1.0 // sin(wk), cos(wk)
         var env = 1.0
-        var sustain = SUSTAIN
         val attack = sr / 200 // 5 ms
         val end = min(len, buf.size - s0)
         for (k in 0 until end) {
@@ -107,7 +105,7 @@ object Synth {
             }
             val ns = s * cw + c * sw; c = c * cw - s * sw; s = ns
             if (k > release) env *= releaseStep
-            else { env = sustain + (env - sustain) * toSustain; sustain *= holdStep }
+            else env = SUSTAIN + (env - SUSTAIN) * toSustain // steady until the written value ends
         }
     }
 
