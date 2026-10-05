@@ -107,7 +107,7 @@ fun SymbolPalette(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it; if (it.isNotBlank() && category != SymbolCategory.ALL_SMUFL) category = null },
-            placeholder = { Text("Buscar: negra, sostenido, coda, calderón, clave de fa…") },
+            placeholder = { Text("Buscar figura: negra, coda…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Filled.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Clear, "Limpiar") } },
             singleLine = true,
@@ -129,7 +129,7 @@ fun SymbolPalette(
             }
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(72.dp),
+            columns = GridCells.Adaptive(84.dp),
             contentPadding = PaddingValues(8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),

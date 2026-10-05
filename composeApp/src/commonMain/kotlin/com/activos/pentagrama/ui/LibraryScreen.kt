@@ -167,8 +167,8 @@ fun LibraryScreen(onOpen: (String, Score) -> Unit) {
                     } else {
                         newScore(Modifier.fillMaxWidth())
                         Spacer(Modifier.height(12.dp))
-                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            mp3(Modifier.weight(1f).fillMaxHeight()); open(Modifier.weight(1f).fillMaxHeight()); demo(Modifier.weight(1f).fillMaxHeight())
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            mp3(Modifier.fillMaxWidth()); open(Modifier.fillMaxWidth()); demo(Modifier.fillMaxWidth())
                         }
                     }
                     Spacer(Modifier.height(28.dp))
@@ -272,11 +272,14 @@ private fun ActionCard(icon: ImageVector, title: String, subtitle: String, modif
         onClick = onClick, shape = MaterialTheme.shapes.medium, color = cs.surface,
         border = BorderStroke(1.dp, cs.outlineVariant), interactionSource = src, modifier = modifier.pressScale(src),
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
-            Icon(icon, null, Modifier.size(24.dp), tint = cs.primary)
-            Spacer(Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).background(cs.primaryContainer, MaterialTheme.shapes.small), contentAlignment = Alignment.Center) {
+                Icon(icon, null, Modifier.size(22.dp), tint = cs.onPrimaryContainer)
+            }
+            Column(Modifier.padding(start = 12.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
         }
     }
 }
@@ -348,8 +351,8 @@ fun NewScoreDialog(onDismiss: () -> Unit, onCreate: (Score) -> Unit) {
                 )
                 Spacer(Modifier.height(14.dp))
                 SectionLabel("Plantilla")
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Templates.Kind.entries.forEach { k -> TemplateTile(k.es, kind == k, Modifier.weight(1f).fillMaxHeight()) { kind = k } }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Templates.Kind.entries.forEach { k -> TemplateTile(k.es, kind == k, Modifier.fillMaxWidth()) { kind = k } }
                 }
                 Spacer(Modifier.height(14.dp))
                 SectionLabel("Clave")

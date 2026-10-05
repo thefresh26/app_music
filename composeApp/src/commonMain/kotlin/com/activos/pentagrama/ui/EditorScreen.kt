@@ -233,12 +233,15 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
                 },
                 actions = {
                     IconButton(onClick = state::undo, enabled = state.canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Deshacer") }
-                    IconButton(onClick = state::redo, enabled = state.canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Rehacer") }
                     IconButton(onClick = { save() }) { Icon(Icons.Filled.Save, "Guardar") }
-                    IconButton(onClick = { showHelp = true }) { Icon(Icons.AutoMirrored.Filled.HelpOutline, "Ayuda") }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más") }
                         DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem({ Text("Rehacer") }, { menu = false; state.redo() }, enabled = state.canRedo,
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Redo, null) })
+                            DropdownMenuItem({ Text("¿Cómo se usa?") }, { menu = false; showHelp = true },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, null) })
+                            HorizontalDivider()
                             DropdownMenuItem({ Text("Propiedades (título, tempo, compases por línea)") }, { menu = false; showProps = true })
                             DropdownMenuItem({ Text("Llenar desde MP3 / audio…") }, { menu = false; transcribe(null) })
                             DropdownMenuItem({ Text("Rellenar compases vacíos con barras rítmicas") }, {
