@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -60,5 +61,28 @@ class MobileScreenshotsTest {
         onNodeWithText("Nueva partitura").performClick()
         waitForText("Plantilla")
         snap("4_nueva_partitura")
+    }
+
+    /** Como el celular del usuario: modo oscuro y letra grande del sistema (×1.3). */
+    @Test
+    fun oscuroConLetraGrande() = runDesktopComposeUiTest(width = 412, height = 892) {
+        setContent { App(dark = true, fontScale = 1.3f) }
+        waitForText("Mis partituras")
+        snap("5_oscuro_letra_grande_inicio")
+
+        onNodeWithText("Nueva partitura").performClick()
+        waitForText("Plantilla")
+        snap("6_oscuro_letra_grande_nueva")
+        onNodeWithText("Cancelar").performClick()
+
+        onNodeWithContentDescription("¿Cómo se usa?").performClick()
+        waitForText("Elige una figura")
+        snap("7_oscuro_letra_grande_ayuda")
+        onNodeWithText("Entendido").performClick()
+
+        onNodeWithText("Ver ejemplo").performClick()
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithTag("score").fetchSemanticsNodes().isNotEmpty() }
+        waitForText("compases")
+        snap("8_oscuro_letra_grande_editor")
     }
 }

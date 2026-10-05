@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.font.FontFamily
 import com.activos.pentagrama.editor.EditorState
 import com.activos.pentagrama.generated.resources.Res
@@ -46,8 +48,11 @@ sealed interface Screen {
 
 @OptIn(ExperimentalResourceApi::class)
 @Composable
-fun App() {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors, typography = paperTypography(), shapes = PaperShapes) {
+/** [dark] y [fontScale] existen para las pruebas de capturas (modo oscuro y letra grande del celular). */
+fun App(dark: Boolean = isSystemInDarkTheme(), fontScale: Float? = null) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale ?: d.fontScale)) {
+    MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = paperTypography(), shapes = PaperShapes) {
         val music = FontFamily(Font(Res.font.bravura))
         var smufl by remember { mutableStateOf<List<SmuflGlyph>?>(null) }
         LaunchedEffect(Unit) {
@@ -83,5 +88,6 @@ fun App() {
                 }
             }
         }
+    }
     }
 }
