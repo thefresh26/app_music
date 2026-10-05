@@ -25,17 +25,19 @@ class EditorState(initial: Score, val id: String) {
     /** Play each note while writing it (like pressing a piano key). */
     var soundOn by mutableStateOf(true)
     /** Set by the screen: plays the given MIDI notes. */
-    var onAudition: ((List<Int>) -> Unit)? = null
+    var onAudition: ((midis: List<Int>, seconds: Double) -> Unit)? = null
 
     private fun auditionSelected() {
         if (!soundOn) return
         val sel = selection ?: return
         val e = sel.event?.let { score.measures.getOrNull(sel.measure)?.events?.getOrNull(it) } ?: return
+        // Sounds as long as it is written: a whole note lasts its 4 beats at the score tempo (capped for very slow tempos).
+        val secs = (e.ticks * 60.0 / (score.tempoBpm.coerceIn(20, 400) * com.activos.pentagrama.model.TICKS_PER_QUARTER)).coerceIn(0.15, 8.0)
         when {
-            e.kind == EventKind.NOTE && e.pitches.isNotEmpty() -> onAudition?.invoke(e.pitches.map { it.midi })
+            e.kind == EventKind.NOTE && e.pitches.isNotEmpty() -> onAudition?.invoke(e.pitches.map { it.midi }, secs)
             e.kind == EventKind.SLASH -> {
                 val tick = score.measures[sel.measure].events.take(sel.event!!).sumOf { it.ticks }
-                onAudition?.invoke(com.activos.pentagrama.audio.Synth.slashNotes(score, sel.measure, tick))
+                onAudition?.invoke(com.activos.pentagrama.audio.Synth.slashNotes(score, sel.measure, tick), secs * 0.9)
             }
         }
     }

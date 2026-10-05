@@ -207,7 +207,7 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
             .onSuccess { saver.save(fileNameOf(state.score, "pdf"), "application/pdf", it) }
             .onFailure { state.message = "No se pudo crear el PDF: ${it.message}" }
     }
-    state.onAudition = { midis -> if (playJob == null) runCatching { AudioPlayer.play(Synth.preview(midis), Synth.SAMPLE_RATE) } }
+    state.onAudition = { midis, secs -> if (playJob == null) runCatching { AudioPlayer.play(Synth.preview(midis, secs), Synth.SAMPLE_RATE) } }
     var showHelp by remember { mutableStateOf(false) }
     val transcribe = rememberTranscription { r ->
         state.updateScore { r.score }

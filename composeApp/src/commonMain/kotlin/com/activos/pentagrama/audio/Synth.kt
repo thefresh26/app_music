@@ -29,6 +29,8 @@ class Rendered(val pcm: ShortArray, val sampleRate: Int, val measureStarts: List
  */
 object Synth {
     const val SAMPLE_RATE = 22_050
+    private const val SUSTAIN = 0.6
+    private const val RELEASE_SEC = 0.05
 
     /** Measure indices in playback order, expanding |: :| repeats once and skipping "1." endings on the second pass. */
     fun playbackOrder(score: Score, from: Int = 0): List<Int> {
@@ -75,19 +77,25 @@ object Synth {
 
     private fun freq(midi: Int) = 440.0 * 2.0.pow((midi - 69) / 12.0)
 
-    /** Adds one decaying additive tone into [buf]. Oscillator and envelope run as recurrences (no sin/exp per sample). */
+    /**
+     * Adds one additive tone into [buf] that lasts exactly its written value: quick attack, settles to a steady
+     * level that holds for the whole duration (a whole note sounds its 4 beats), then a short release.
+     * Oscillator and envelope run as recurrences (no sin/exp per sample).
+     */
     private fun tone(buf: FloatArray, startSec: Double, durSec: Double, midi: Int, gain: Double) {
         val sr = SAMPLE_RATE
         val s0 = (startSec * sr).toInt()
-        val len = ((durSec + 0.08) * sr).toInt()
+        val len = ((durSec + RELEASE_SEC * 3) * sr).toInt()
         val f = freq(midi)
         val w = 2 * PI * f / sr
         val cw = cos(w); val sw = sin(w)
-        val decayStep = exp(-(1.2 + f / 400.0) / sr)
-        val releaseStep = exp(-1.0 / (0.02 * sr))
+        val toSustain = exp(-1.0 / (0.25 * sr))     // attack peak settles in ~0.25 s
+        val holdStep = exp(-1.0 / (12.0 * sr))      // almost flat while the note is held
+        val releaseStep = exp(-1.0 / (RELEASE_SEC * sr))
         val release = (durSec * sr).toInt()
         var s = 0.0; var c = 1.0 // sin(wk), cos(wk)
         var env = 1.0
+        var sustain = SUSTAIN
         val attack = sr / 200 // 5 ms
         val end = min(len, buf.size - s0)
         for (k in 0 until end) {
@@ -98,7 +106,8 @@ object Synth {
                 buf[s0 + k] += (gain * a * env * x).toFloat()
             }
             val ns = s * cw + c * sw; c = c * cw - s * sw; s = ns
-            env *= if (k > release) decayStep * releaseStep else decayStep
+            if (k > release) env *= releaseStep
+            else { env = sustain + (env - sustain) * toSustain; sustain *= holdStep }
         }
     }
 
@@ -133,7 +142,7 @@ object Synth {
         return (r - 12) to iv.map { r + it }
     }
 
-    /** Short sound of one note or chord, to hear what was just written. */
+    /** Sound of one note or chord as written ([seconds] = its value at the score tempo), to hear what was just written. */
     fun preview(midis: List<Int>, seconds: Double = 0.6): ShortArray {
         val buf = FloatArray(((seconds + 0.15) * SAMPLE_RATE).toInt())
         if (midis.isEmpty()) click(buf, 0.0, 0.6)

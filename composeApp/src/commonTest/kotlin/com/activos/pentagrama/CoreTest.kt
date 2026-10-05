@@ -265,4 +265,19 @@ class CoreTest {
         // Y no se queda colgado: la ligadura solo une la misma nota en notas seguidas.
         assertEquals(render(true).pcm.size, render(false).pcm.size)
     }
+
+    @Test
+    fun laRedondaSuenaSusCuatroTiempos() {
+        // A 60 BPM una redonda dura 4 s: debe seguir sonando parejo hasta el final y callarse al terminar.
+        val r = Synth.render(Score(tempoBpm = 60, measures = listOf(Measure(events = listOf(Event(EventKind.NOTE, NoteValue.WHOLE, listOf(Pitch.fromMidi(60))))))))
+        fun level(sec: Double) = (0 until 2205).maxOf { kotlin.math.abs(r.pcm[(sec * r.sampleRate).toInt() + it].toInt()) }
+        val inicio = level(0.6); val final = level(3.7)
+        println("redonda: nivel a 0,6 s=$inicio, a 3,7 s=$final, a 4,3 s=${level(4.3)}")
+        assertTrue(final > inicio * 0.6, "la redonda se apaga antes de tiempo ($inicio → $final)")
+        assertTrue(level(4.3) < inicio * 0.05, "la redonda sigue sonando después de sus 4 tiempos")
+        // Al escribirla también suena su duración completa, no un toque corto.
+        val p = Synth.preview(listOf(60), 4.0)
+        assertTrue(p.size >= 4 * Synth.SAMPLE_RATE)
+        assertTrue((0 until 2205).maxOf { kotlin.math.abs(p[(3.7 * Synth.SAMPLE_RATE).toInt() + it].toInt()) } > inicio * 0.6)
+    }
 }
